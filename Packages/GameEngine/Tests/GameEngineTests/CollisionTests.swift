@@ -67,4 +67,18 @@ final class CollisionTests: XCTestCase {
         XCTAssertEqual(p.x, 390, accuracy: 1e-6)
         XCTAssertEqual(p.y, 390, accuracy: 1e-6)
     }
+
+    func testHeavierBodyIsDisplacedLessOnSeparation() {
+        let world = World(size: Vector2(400, 400))
+        let light = world.addNPC(at: Vector2(200, 200), radius: 10, mass: 1)
+        let heavy = world.addNPC(at: Vector2(210, 200), radius: 10, mass: 3)
+        world.update(dt: 1.0 / 120.0)
+        let lightMoved = abs(world.body(withID: light)!.position.x - 200)
+        let heavyMoved = abs(world.body(withID: heavy)!.position.x - 210)
+        // Penetration 10, inverse-mass weights: light (1/1) takes 3/4 = 7.5,
+        // heavy (1/3) takes 1/4 = 2.5.
+        XCTAssertEqual(lightMoved, 7.5, accuracy: 1e-6)
+        XCTAssertEqual(heavyMoved, 2.5, accuracy: 1e-6)
+        XCTAssertEqual(lightMoved / heavyMoved, 3.0, accuracy: 1e-6)
+    }
 }

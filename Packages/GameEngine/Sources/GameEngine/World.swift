@@ -70,6 +70,9 @@ public final class World {
         resolveCollisions()
         applyDamping(dt: dt)
         clampToBounds()
+        // Clamping can push a wall-pinned body back into a neighbor it was just
+        // separated from; one more pass keeps pairs resolved within the frame.
+        resolveCollisions()
     }
 
     private func seekPlayer(dt: Double) {
