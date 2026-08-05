@@ -2,6 +2,11 @@ import SpriteKit
 import GameEngine
 
 final class GameScene: SKScene {
+    /// Fired (on the main thread) shortly after the last NPC dies, once its
+    /// death animation has played out.
+    var onAllNPCsEliminated: (() -> Void)?
+
+    private var gameStarted = false
     private var world: World?
     private var playerNode: SKShapeNode?
     private var npcNodes: [BodyID: SKShapeNode] = [:]
@@ -54,10 +59,24 @@ final class GameScene: SKScene {
 
     // MARK: - World setup
 
+    /// Starts a fresh game: tears down any previous world/nodes and builds a
+    /// new one (player centered, NPCs re-randomized). Called from the menu.
+    func startGame() {
+        removeAllChildren()
+        world = nil
+        playerNode = nil
+        npcNodes = [:]
+        laserNode = nil
+        sparkNode = nil
+        laserAimPoint = nil
+        gameStarted = true
+        ensureWorld() // builds now if the scene is laid out; else on next update
+    }
+
     /// The scene's size is zero until SpriteView lays it out, so the world is
-    /// created lazily on the first sized update.
+    /// created lazily on the first sized update after the game starts.
     private func ensureWorld() {
-        guard world == nil, size.width > 0, size.height > 0 else { return }
+        guard gameStarted, world == nil, size.width > 0, size.height > 0 else { return }
         let world = World(size: Vector2(size.width, size.height))
 
         world.addPlayer(at: Vector2(size.width / 2, size.height / 2), radius: playerRadius)
@@ -242,5 +261,13 @@ final class GameScene: SKScene {
             ]),
             .removeFromParent(),
         ]))
+
+        // Last one? Let the death animation play, then report the win.
+        if world?.bodies.contains(where: { $0.kind == .npc }) == false {
+            gameStarted = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+                self?.onAllNPCsEliminated?()
+            }
+        }
     }
 }
