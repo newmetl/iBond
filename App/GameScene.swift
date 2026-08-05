@@ -218,7 +218,9 @@ final class GameScene: SKScene {
         sparkNode?.position = CGPoint(x: hit.point.x, y: hit.point.y)
         sparkNode?.isHidden = false
 
-        if let victimID = hit.bodyID {
+        // Only NPCs die; when obstacles join the raycast (M2) they must block,
+        // not vanish.
+        if let victimID = hit.bodyID, world.body(withID: victimID)?.kind == .npc {
             kill(npcID: victimID)
         }
     }

@@ -56,4 +56,15 @@ final class MovementTests: XCTestCase {
         XCTAssertEqual(body.velocity, .zero)
         XCTAssertNil(world.moveTarget)
     }
+
+    func testEdgeTapTargetIsClampedAndReached() {
+        let world = World(size: Vector2(400, 400))
+        let id = world.addPlayer(at: Vector2(200, 200), radius: 16)
+        world.moveTarget = Vector2(398, 200) // closer to the wall than the radius allows
+        for _ in 0..<600 { world.update(dt: 1.0 / 120.0) } // 5 seconds
+        let body = world.body(withID: id)!
+        XCTAssertEqual(body.position.x, 384, accuracy: 1e-6) // 400 - radius
+        XCTAssertEqual(body.velocity, .zero) // not pinned into the wall
+        XCTAssertNil(world.moveTarget) // target cleared, not stranded
+    }
 }

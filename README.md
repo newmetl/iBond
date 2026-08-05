@@ -15,6 +15,11 @@ The Xcode project is generated, not checked in:
     xcodegen                # writes iBond.xcodeproj
     open iBond.xcodeproj
 
+Or build from the command line (requires iOS 17+ simulator):
+
+    xcodebuild -project iBond.xcodeproj -scheme iBond \
+      -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
+
 Engine unit tests (no simulator needed):
 
     swift test --package-path Packages/GameEngine

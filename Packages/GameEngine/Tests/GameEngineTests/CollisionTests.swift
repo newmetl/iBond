@@ -81,4 +81,15 @@ final class CollisionTests: XCTestCase {
         XCTAssertEqual(heavyMoved, 2.5, accuracy: 1e-6)
         XCTAssertEqual(lightMoved / heavyMoved, 3.0, accuracy: 1e-6)
     }
+
+    func testBodiesStayInBoundsWhenSqueezedAgainstWall() {
+        let world = World(size: Vector2(400, 400))
+        world.addNPC(at: Vector2(385, 200), radius: 10)
+        world.addNPC(at: Vector2(390, 200), radius: 10) // overlapping pair at the wall
+        for _ in 0..<10 { world.update(dt: 1.0 / 120.0) }
+        for body in world.bodies {
+            XCTAssertLessThanOrEqual(body.position.x, 400 - body.radius + 1e-6)
+            XCTAssertGreaterThanOrEqual(body.position.x, body.radius - 1e-6)
+        }
+    }
 }

@@ -73,16 +73,27 @@ public final class World {
         // Clamping can push a wall-pinned body back into a neighbor it was just
         // separated from; one more pass keeps pairs resolved within the frame.
         resolveCollisions()
+        // ...and that pass must never leave a body outside the bounds for the
+        // rendered frame — residual overlap heals next frame, protrusion won't.
+        clampToBounds()
     }
 
     private func seekPlayer(dt: Double) {
         guard let pid = playerID, let idx = bodies.firstIndex(where: { $0.id == pid }) else { return }
-        guard let target = moveTarget else {
+        guard var target = moveTarget else {
             // No destination: the player is kinematic, so collision impulses
             // must not leave it drifting.
             bodies[idx].velocity = .zero
             return
         }
+        // Targets are only reachable inside the playable rect (clampToBounds
+        // stops the body one radius from each wall). Clamp so edge taps — or a
+        // rotation that shrank the bounds — can't strand an unreachable target.
+        let r = bodies[idx].radius
+        target.x = min(max(target.x, r), size.x - r)
+        target.y = min(max(target.y, r), size.y - r)
+        moveTarget = target
+
         let toTarget = target - bodies[idx].position
         if toTarget.length <= playerSpeed * dt {
             bodies[idx].position = target
