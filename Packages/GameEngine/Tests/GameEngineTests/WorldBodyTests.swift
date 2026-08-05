@@ -47,4 +47,26 @@ final class WorldBodyTests: XCTestCase {
             world.addNPC(at: p, radius: 14)
         }
     }
+
+    func testRandomFreePositionReturnsNilForTooSmallWorld() {
+        let world = World(size: Vector2(20, 20))
+        var rng = SystemRandomNumberGenerator()
+        XCTAssertNil(world.randomFreePosition(radius: 14, using: &rng))
+    }
+
+    func testRandomFreePositionReturnsNilWhenWorldIsFull() {
+        // One body whose blocked zone covers every legal sample point.
+        let world = World(size: Vector2(60, 60))
+        world.addNPC(at: Vector2(30, 30), radius: 30)
+        var rng = SystemRandomNumberGenerator()
+        XCTAssertNil(world.randomFreePosition(radius: 14, using: &rng))
+    }
+
+    func testRemovingSameBodyTwiceIsHarmless() {
+        let world = World(size: Vector2(400, 400))
+        let id = world.addNPC(at: Vector2(120, 80))
+        world.remove(bodyID: id)
+        world.remove(bodyID: id)
+        XCTAssertTrue(world.bodies.isEmpty)
+    }
 }

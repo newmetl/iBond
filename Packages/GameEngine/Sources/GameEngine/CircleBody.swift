@@ -11,5 +11,6 @@ public struct CircleBody: Identifiable, Equatable {
     public var position: Vector2
     public var velocity: Vector2
     public var radius: Double
+    /// Must be > 0 — collision response divides by mass.
     public var mass: Double
 }

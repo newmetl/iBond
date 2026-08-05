@@ -18,6 +18,8 @@ public final class World {
         self.size = size
     }
 
+    /// Adds the player body. Call at most once per World — the engine drives a
+    /// single player via `playerID`; a second call would orphan the first body.
     @discardableResult
     public func addPlayer(at position: Vector2, radius: Double = 16, mass: Double = 1) -> BodyID {
         let id = makeID()
@@ -58,6 +60,36 @@ public final class World {
             if isFree { return p }
         }
         return nil
+    }
+
+    /// Advance the simulation by one fixed timestep.
+    public func update(dt: Double) {
+        seekPlayer(dt: dt)
+        integrate(dt: dt)
+    }
+
+    private func seekPlayer(dt: Double) {
+        guard let pid = playerID, let idx = bodies.firstIndex(where: { $0.id == pid }) else { return }
+        guard let target = moveTarget else {
+            // No destination: the player is kinematic, so collision impulses
+            // must not leave it drifting.
+            bodies[idx].velocity = .zero
+            return
+        }
+        let toTarget = target - bodies[idx].position
+        if toTarget.length <= playerSpeed * dt {
+            bodies[idx].position = target
+            bodies[idx].velocity = .zero
+            moveTarget = nil
+        } else {
+            bodies[idx].velocity = toTarget.normalized * playerSpeed
+        }
+    }
+
+    private func integrate(dt: Double) {
+        for i in bodies.indices {
+            bodies[i].position += bodies[i].velocity * dt
+        }
     }
 
     private func makeID() -> BodyID {
