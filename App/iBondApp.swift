@@ -18,7 +18,7 @@ struct GameView: View {
     }()
 
     var body: some View {
-        SpriteView(scene: scene)
+        SpriteView(scene: scene, options: [.ignoresSiblingOrder])
             .ignoresSafeArea()
             .statusBarHidden()
     }
