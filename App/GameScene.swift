@@ -5,6 +5,8 @@ final class GameScene: SKScene {
     /// Fired (on the main thread) shortly after the last NPC dies, once its
     /// death animation has played out.
     var onAllNPCsEliminated: (() -> Void)?
+    /// Fired when the laser battery runs out while NPCs are still alive.
+    var onBatteryEmpty: (() -> Void)?
 
     private var gameStarted = false
     private var world: World?
@@ -24,6 +26,13 @@ final class GameScene: SKScene {
     private var laserNode: SKShapeNode?
     private var sparkNode: SKShapeNode?
 
+    /// Laser battery: seconds of firing time. Drains only while the beam is
+    /// actually rendering; empty battery with NPCs alive means game over.
+    private let laserCapacity: Double = 2
+    private var laserCharge: Double = 2
+    private var batteryLabel: SKLabelNode?
+    private var frameDt: Double = 0   // last frame's clamped wall-clock dt
+
     override func didMove(to view: SKView) {
         backgroundColor = SKColor(red: 0.05, green: 0.05, blue: 0.09, alpha: 1)
         view.isMultipleTouchEnabled = true
@@ -33,6 +42,7 @@ final class GameScene: SKScene {
         // Rotation / first layout: keep engine bounds in sync; bodies re-clamp
         // on the next update.
         world?.size = Vector2(size.width, size.height)
+        batteryLabel?.position = CGPoint(x: size.width / 2, y: size.height - 80)
     }
 
     override func update(_ currentTime: TimeInterval) {
@@ -46,6 +56,7 @@ final class GameScene: SKScene {
             dt = 0
         }
         lastUpdateTime = currentTime
+        frameDt = dt
 
         accumulator += dt
         while accumulator >= fixedStep {
@@ -55,6 +66,7 @@ final class GameScene: SKScene {
 
         syncNodes()
         processLaser()
+        updateBatteryLabel()
     }
 
     // MARK: - World setup
@@ -69,6 +81,8 @@ final class GameScene: SKScene {
         laserNode = nil
         sparkNode = nil
         laserAimPoint = nil
+        batteryLabel = nil
+        laserCharge = laserCapacity
         gameStarted = true
         ensureWorld() // builds now if the scene is laid out; else on next update
     }
@@ -125,6 +139,19 @@ final class GameScene: SKScene {
         ])))
         addChild(spark)
         sparkNode = spark
+
+        let label = SKLabelNode(fontNamed: "Menlo-Bold")
+        label.fontSize = 15
+        label.fontColor = SKColor(white: 1, alpha: 0.85)
+        label.position = CGPoint(x: size.width / 2, y: size.height - 80)
+        label.zPosition = 3
+        addChild(label)
+        batteryLabel = label
+    }
+
+    private func updateBatteryLabel() {
+        let percent = Int((laserCharge / laserCapacity * 100).rounded())
+        batteryLabel?.text = String(format: "%d%% · %.2fs", percent, laserCharge)
     }
 
     private func makeCircleNode(radius: Double, fill: SKColor) -> SKShapeNode {
@@ -220,7 +247,7 @@ final class GameScene: SKScene {
 
     private func processLaser() {
         guard let world else { return }
-        guard let aim = laserAimPoint,
+        guard laserCharge > 0, let aim = laserAimPoint,
               let hit = world.castLaser(through: Vector2(aim.x, aim.y)),
               let player = world.playerID.flatMap({ world.body(withID: $0) }) else {
             laserNode?.isHidden = true
@@ -246,6 +273,19 @@ final class GameScene: SKScene {
         // not vanish.
         if let victimID = hit.bodyID, world.body(withID: victimID)?.kind == .npc {
             kill(npcID: victimID)
+        }
+
+        // The beam rendered this frame, so it drains the battery. This runs
+        // after the kill so a last-kill-on-last-drop tie counts as a win.
+        laserCharge = max(0, laserCharge - frameDt)
+        if laserCharge <= 0, gameStarted,
+           world.bodies.contains(where: { $0.kind == .npc }) {
+            gameStarted = false
+            laserNode?.isHidden = true
+            sparkNode?.isHidden = true
+            DispatchQueue.main.async { [weak self] in
+                self?.onBatteryEmpty?()
+            }
         }
     }
 

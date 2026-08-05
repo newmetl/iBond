@@ -14,6 +14,16 @@ enum GamePhase {
     case menu
     case playing
     case finished
+    case gameOver
+
+    var overlayTitle: String {
+        switch self {
+        case .menu: return "iBond"
+        case .playing: return ""
+        case .finished: return "Done!"
+        case .gameOver: return "Game over!"
+        }
+    }
 }
 
 struct GameView: View {
@@ -34,7 +44,7 @@ struct GameView: View {
                 Color.black.opacity(0.6)
                     .ignoresSafeArea()
                 VStack(spacing: 28) {
-                    Text(phase == .menu ? "iBond" : "Done!")
+                    Text(phase.overlayTitle)
                         .font(.system(size: 52, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
                     Button(phase == .menu ? "Start!" : "Back") {
@@ -54,6 +64,7 @@ struct GameView: View {
         .statusBarHidden()
         .onAppear {
             scene.onAllNPCsEliminated = { phase = .finished }
+            scene.onBatteryEmpty = { phase = .gameOver }
         }
     }
 }
