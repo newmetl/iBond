@@ -67,4 +67,23 @@ final class LaserTests: XCTestCase {
         world.addNPC(at: Vector2(300, 200))
         XCTAssertNil(world.castLaser(through: Vector2(300, 200)))
     }
+
+    func testOriginInsideNPCHitsFarSide() {
+        // Player overlapping an NPC: the beam exits through the far side.
+        let world = makeWorld()
+        let npc = world.addNPC(at: Vector2(205, 200), radius: 30) // player center inside
+        let hit = world.castLaser(through: Vector2(300, 200))!
+        XCTAssertEqual(hit.bodyID, npc)
+        XCTAssertEqual(hit.point.x, 235, accuracy: 1e-6) // 205 + 30
+        XCTAssertEqual(hit.point.y, 200, accuracy: 1e-6)
+    }
+
+    func testAsymmetricDiagonalMissExitsAtNearestWall() {
+        // Shallow angle: reaches the right wall (x=400) before the top wall.
+        let world = makeWorld()
+        let hit = world.castLaser(through: Vector2(300, 250))! // dir (2,1)/√5
+        XCTAssertNil(hit.bodyID)
+        XCTAssertEqual(hit.point.x, 400, accuracy: 1e-6)
+        XCTAssertEqual(hit.point.y, 300, accuracy: 1e-6) // 200 + (200/2)*1
+    }
 }

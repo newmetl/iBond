@@ -34,6 +34,8 @@ public extension World {
     /// Smallest positive distance along the ray at which it enters the circle,
     /// or nil if the ray misses (or the circle is entirely behind the origin).
     /// Solves |origin + t*dir - center|² = r² for t.
+    /// - Precondition: `direction` must be a unit vector — the quadratic below
+    ///   assumes |direction| == 1.
     internal static func rayCircleIntersection(
         origin: Vector2, direction: Vector2, center: Vector2, radius: Double
     ) -> Double? {
@@ -44,7 +46,7 @@ public extension World {
         let root = discriminant.squareRoot()
         let tEnter = tCenter - root
         let tExit = tCenter + root
-        let epsilon = 1e-9
+        let epsilon = 1e-9 // rejects t≈0 self-intersection at the origin; not a tangent-behavior knob
         if tEnter > epsilon { return tEnter }
         if tExit > epsilon { return tExit } // origin inside the circle: hit the far side
         return nil
