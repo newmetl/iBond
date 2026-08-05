@@ -67,6 +67,7 @@ final class GameScene: SKScene {
     private func buildNodes(for world: World) {
         let player = makeCircleNode(radius: playerRadius,
                                     fill: SKColor(red: 0.2, green: 0.85, blue: 1, alpha: 1))
+        player.zPosition = 1 // above NPCs so overlap during shoves renders stably
         player.addChild(makeAimLineNode())
         addChild(player)
         playerNode = player
@@ -74,6 +75,7 @@ final class GameScene: SKScene {
         for body in world.bodies where body.kind == .npc {
             let node = makeCircleNode(radius: npcRadius,
                                       fill: SKColor(red: 1, green: 0.45, blue: 0.35, alpha: 1))
+            node.zPosition = 0
             addChild(node)
             npcNodes[body.id] = node
         }
