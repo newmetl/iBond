@@ -88,8 +88,7 @@ final class GameScene: SKScene {
 
         let laser = SKShapeNode()
         laser.strokeColor = SKColor(red: 1, green: 0.2, blue: 0.3, alpha: 1)
-        laser.lineWidth = 3
-        laser.glowWidth = 6
+        laser.lineWidth = 1.5
         laser.isHidden = true
         laser.zPosition = -1 // beam under the circles
         addChild(laser)
