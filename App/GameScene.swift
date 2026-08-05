@@ -137,6 +137,12 @@ final class GameScene: SKScene {
             switch body.kind {
             case .player:
                 playerNode?.position = CGPoint(x: body.position.x, y: body.position.y)
+                // Face the direction of travel. processLaser() runs after this
+                // each frame and overrides with the firing direction while the
+                // laser is held; when idle, the last direction persists.
+                if body.velocity.length > 0 {
+                    playerNode?.zRotation = CGFloat(atan2(body.velocity.y, body.velocity.x))
+                }
             case .npc:
                 npcNodes[body.id]?.position = CGPoint(x: body.position.x, y: body.position.y)
             }
