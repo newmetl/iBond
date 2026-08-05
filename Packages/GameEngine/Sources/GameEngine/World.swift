@@ -62,10 +62,14 @@ public final class World {
         return nil
     }
 
-    /// Advance the simulation by one fixed timestep.
+    /// Advance the simulation by one fixed timestep. `dt` must be >= 0
+    /// (the app's fixed-step accumulator guarantees this).
     public func update(dt: Double) {
         seekPlayer(dt: dt)
         integrate(dt: dt)
+        resolveCollisions()
+        applyDamping(dt: dt)
+        clampToBounds()
     }
 
     private func seekPlayer(dt: Double) {
@@ -89,6 +93,63 @@ public final class World {
     private func integrate(dt: Double) {
         for i in bodies.indices {
             bodies[i].position += bodies[i].velocity * dt
+        }
+    }
+
+    /// Test/AI hook: directly set a body's velocity.
+    public func setVelocity(_ velocity: Vector2, forBodyID id: BodyID) {
+        guard let idx = bodies.firstIndex(where: { $0.id == id }) else { return }
+        bodies[idx].velocity = velocity
+    }
+
+    /// Pairwise circle-circle response: positional separation weighted by inverse
+    /// mass, plus a zero-restitution impulse so bodies push rather than bounce.
+    private func resolveCollisions() {
+        guard bodies.count > 1 else { return }
+        for i in 0..<(bodies.count - 1) {
+            for j in (i + 1)..<bodies.count {
+                var a = bodies[i]
+                var b = bodies[j]
+                let delta = b.position - a.position
+                let dist = delta.length
+                let minDist = a.radius + b.radius
+                guard dist < minDist else { continue }
+
+                // Concentric circles have no meaningful normal; pick +x.
+                let normal = dist > 0 ? delta / dist : Vector2(1, 0)
+                let invA = 1 / a.mass
+                let invB = 1 / b.mass
+                let invSum = invA + invB
+
+                let penetration = minDist - dist
+                a.position -= normal * (penetration * invA / invSum)
+                b.position += normal * (penetration * invB / invSum)
+
+                let approachSpeed = (b.velocity - a.velocity).dot(normal)
+                if approachSpeed < 0 {
+                    let impulse = -approachSpeed / invSum
+                    a.velocity -= normal * (impulse * invA)
+                    b.velocity += normal * (impulse * invB)
+                }
+
+                bodies[i] = a
+                bodies[j] = b
+            }
+        }
+    }
+
+    private func applyDamping(dt: Double) {
+        let factor = max(0, 1 - npcDamping * dt)
+        for i in bodies.indices where bodies[i].kind == .npc {
+            bodies[i].velocity *= factor
+        }
+    }
+
+    private func clampToBounds() {
+        for i in bodies.indices {
+            let r = bodies[i].radius
+            bodies[i].position.x = min(max(bodies[i].position.x, r), size.x - r)
+            bodies[i].position.y = min(max(bodies[i].position.y, r), size.y - r)
         }
     }
 

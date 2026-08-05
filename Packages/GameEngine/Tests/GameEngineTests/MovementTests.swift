@@ -34,4 +34,26 @@ final class MovementTests: XCTestCase {
         world.update(dt: 1.0)
         XCTAssertEqual(world.body(withID: id)!.position, Vector2(100, 100))
     }
+
+    func testPlayerMovesDiagonallyTowardTarget() {
+        let world = World(size: Vector2(400, 400))
+        let id = world.addPlayer(at: Vector2(100, 100))
+        world.playerSpeed = 100
+        world.moveTarget = Vector2(160, 180) // 3-4-5 triangle: direction (0.6, 0.8)
+        world.update(dt: 0.5)
+        let p = world.body(withID: id)!.position
+        XCTAssertEqual(p.x, 130, accuracy: 1e-6) // 100 + 0.6 * 50
+        XCTAssertEqual(p.y, 140, accuracy: 1e-6) // 100 + 0.8 * 50
+    }
+
+    func testMoveTargetExactlyAtPlayerPositionIsANoOp() {
+        let world = World(size: Vector2(400, 400))
+        let id = world.addPlayer(at: Vector2(100, 100))
+        world.moveTarget = Vector2(100, 100)
+        world.update(dt: 0.5)
+        let body = world.body(withID: id)!
+        XCTAssertEqual(body.position, Vector2(100, 100))
+        XCTAssertEqual(body.velocity, .zero)
+        XCTAssertNil(world.moveTarget)
+    }
 }
