@@ -14,6 +14,9 @@ final class GameScene: SKScene {
     private let npcRadius: Double = 14
     private let npcCount = 8
 
+    private let touchController = TouchController()
+    private var laserAimPoint: CGPoint?   // set while the laser finger is down
+
     override func didMove(to view: SKView) {
         backgroundColor = SKColor(red: 0.05, green: 0.05, blue: 0.09, alpha: 1)
         view.isMultipleTouchEnabled = true
@@ -112,6 +115,55 @@ final class GameScene: SKScene {
             case .npc:
                 npcNodes[body.id]?.position = CGPoint(x: body.position.x, y: body.position.y)
             }
+        }
+    }
+
+    // MARK: - Input
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        for touch in touches {
+            let location = touch.location(in: self)
+            switch touchController.began(touch) {
+            case .movement:
+                world?.moveTarget = Vector2(location.x, location.y)
+            case .laser:
+                laserAimPoint = location
+            case nil:
+                break
+            }
+        }
+    }
+
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        for touch in touches {
+            let location = touch.location(in: self)
+            switch touchController.role(of: touch) {
+            case .movement:
+                // Hold-to-follow: keep re-targeting the finger.
+                world?.moveTarget = Vector2(location.x, location.y)
+            case .laser:
+                laserAimPoint = location
+            case nil:
+                break
+            }
+        }
+    }
+
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        endTouches(touches)
+    }
+
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        endTouches(touches)
+    }
+
+    private func endTouches(_ touches: Set<UITouch>) {
+        for touch in touches {
+            if touchController.ended(touch) == .laser {
+                laserAimPoint = nil
+            }
+            // A lifted movement finger leaves its last target in place — a tap
+            // means "go there", so the player keeps gliding to it.
         }
     }
 }
