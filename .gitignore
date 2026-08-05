@@ -1,0 +1,5 @@
+.DS_Store
+iBond.xcodeproj/
+xcuserdata/
+.build/
+DerivedData/

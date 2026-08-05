@@ -1,0 +1,23 @@
+name: iBond
+options:
+  bundleIdPrefix: com.wojtekgorecki
+  deploymentTarget:
+    iOS: "17.0"
+packages:
+  GameEngine:
+    path: Packages/GameEngine
+targets:
+  iBond:
+    type: application
+    platform: iOS
+    sources:
+      - App
+    dependencies:
+      - package: GameEngine
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SWIFT_VERSION: "5.9"
