@@ -15,9 +15,10 @@ final class GameScene: SKScene {
     private var world: World?
     private var playerNode: SKShapeNode?
     private var npcNodes: [BodyID: SKShapeNode] = [:]
-    private var targetCrossNode: SKShapeNode?
     private var lastPlayerPosition: CGPoint?
     private var cameraNode: SKCameraNode?
+    private var joystickBase: SKShapeNode?
+    private var joystickKnob: SKShapeNode?
 
     private var shooterAimStart: [BodyID: TimeInterval] = [:]
     private var shooterAimNodes: [BodyID: SKShapeNode] = [:]
@@ -44,11 +45,13 @@ final class GameScene: SKScene {
     /// shooters — closer spawns ended games before the first screenshot.
     private let runnerMinPlayerDistance: Double = 520
     /// Seconds a shooter aims (green telegraph line) before the killing shot.
-    private let telegraphDuration: TimeInterval = 0.6
+    private let telegraphDuration: TimeInterval = 1.5
 
-    /// Movement targets sit this far above the touch point so the player
-    /// circle stays visible above the fingertip instead of hiding under it.
-    private let touchTargetOffset: CGFloat = 60
+    /// Virtual joystick (lower-left): knob travel radius, touch-capture zone,
+    /// and the base's offset from the screen corner.
+    private let joystickRadius: CGFloat = 70
+    private let steeringZoneRadius: CGFloat = 120
+    private let joystickCornerOffset = CGPoint(x: 120, y: 140)
 
     private let rockCount = 3
     private let mirrorCount = 2
@@ -76,6 +79,13 @@ final class GameScene: SKScene {
         // The map is larger than the screen and fixed at game start — resizes
         // only change the viewport. Keep the HUD pinned inside the camera frame.
         batteryLabel?.position = CGPoint(x: 0, y: size.height / 2 - 80)
+        joystickBase?.position = joystickCenter
+    }
+
+    /// Joystick base center in camera coordinates (lower-left corner).
+    private var joystickCenter: CGPoint {
+        CGPoint(x: -size.width / 2 + joystickCornerOffset.x,
+                y: -size.height / 2 + joystickCornerOffset.y)
     }
 
     override func update(_ currentTime: TimeInterval) {
@@ -99,11 +109,24 @@ final class GameScene: SKScene {
 
         syncNodes()
         updateCamera()
+        activateVisibleRunners()
         processLaser()
         processShooters(currentTime)
         checkRunnerTouches()
         checkBatteryPickups()
         updateBatteryLabel()
+    }
+
+    /// Runners wait in ambush until they first scroll into view, then chase
+    /// forever — without this, every runner would converge on spawn.
+    private func activateVisibleRunners() {
+        guard gameStarted, let world else { return }
+        for body in world.bodies
+        where body.kind == .runner
+            && !world.activeRunnerIDs.contains(body.id)
+            && isOnScreen(position: body.position, radius: body.radius) {
+            world.activateRunner(body.id)
+        }
     }
 
     // MARK: - World setup
@@ -117,7 +140,8 @@ final class GameScene: SKScene {
         world = nil
         playerNode = nil
         npcNodes = [:]
-        targetCrossNode = nil
+        joystickBase = nil
+        joystickKnob = nil
         lastPlayerPosition = nil
         laserNode = nil
         sparkNode = nil
@@ -179,6 +203,12 @@ final class GameScene: SKScene {
                   world.bodies.allSatisfy({ $0.position.distance(to: candidate) >= $0.radius + npcRadius + 6 })
             else { continue }
             let id = world.addShooter(at: candidate, radius: npcRadius)
+            // "Behind these obstacles": a shooter must start HIDDEN — reject
+            // spots with a clear line to the player's spawn.
+            if let pid = world.playerID, world.hasLineOfSight(from: id, to: pid) {
+                world.remove(bodyID: id)
+                continue
+            }
             if batteryCarrierIDs.count < batteryDropCount { batteryCarrierIDs.insert(id) }
             placedShooters += 1
         }
@@ -286,19 +316,22 @@ final class GameScene: SKScene {
         addChild(spark)
         sparkNode = spark
 
-        // Destination marker: a small cross shown while the player is en route.
-        let crossPath = CGMutablePath()
-        crossPath.move(to: CGPoint(x: -6, y: 0))
-        crossPath.addLine(to: CGPoint(x: 6, y: 0))
-        crossPath.move(to: CGPoint(x: 0, y: -6))
-        crossPath.addLine(to: CGPoint(x: 0, y: 6))
-        let cross = SKShapeNode(path: crossPath)
-        cross.strokeColor = SKColor(white: 1, alpha: 0.7)
-        cross.lineWidth = 1.5
-        cross.isHidden = true
-        cross.zPosition = 0.5 // above the beam, below the circles
-        addChild(cross)
-        targetCrossNode = cross
+        // Virtual joystick, pinned to the camera's lower-left corner.
+        let base = SKShapeNode(circleOfRadius: joystickRadius)
+        base.fillColor = SKColor(white: 1, alpha: 0.05)
+        base.strokeColor = SKColor(white: 1, alpha: 0.25)
+        base.lineWidth = 1.5
+        base.position = joystickCenter
+        base.zPosition = 3
+        camera.addChild(base)
+        joystickBase = base
+
+        let knob = SKShapeNode(circleOfRadius: 26)
+        knob.fillColor = SKColor(white: 1, alpha: 0.28)
+        knob.strokeColor = SKColor(white: 1, alpha: 0.5)
+        knob.lineWidth = 1
+        base.addChild(knob)
+        joystickKnob = knob
 
         let label = SKLabelNode(fontNamed: "Menlo-Bold")
         label.fontSize = 15
@@ -400,25 +433,17 @@ final class GameScene: SKScene {
             }
         }
 
-        // The engine clears moveTarget on arrival, so the cross hides itself.
-        if let target = world.moveTarget {
-            targetCrossNode?.position = CGPoint(x: target.x, y: target.y)
-            targetCrossNode?.isHidden = false
-        } else {
-            targetCrossNode?.isHidden = true
-        }
     }
 
     // MARK: - Input
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         for touch in touches {
-            let location = touch.location(in: self)
-            switch touchController.began(touch) {
-            case .movement:
-                world?.moveTarget = movementTarget(for: location)
+            switch touchController.began(touch, inSteeringZone: isInSteeringZone(touch)) {
+            case .joystick:
+                updateJoystick(with: touch)
             case .laser:
-                laserAimPoint = location
+                laserAimPoint = touch.location(in: self)
             case nil:
                 break
             }
@@ -427,13 +452,11 @@ final class GameScene: SKScene {
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
         for touch in touches {
-            let location = touch.location(in: self)
             switch touchController.role(of: touch) {
-            case .movement:
-                // Hold-to-follow: keep re-targeting the finger.
-                world?.moveTarget = movementTarget(for: location)
+            case .joystick:
+                updateJoystick(with: touch)
             case .laser:
-                laserAimPoint = location
+                laserAimPoint = touch.location(in: self)
             case nil:
                 break
             }
@@ -461,19 +484,48 @@ final class GameScene: SKScene {
         playerNode.zRotation += delta * min(1, smoothingRate * CGFloat(frameDt))
     }
 
-    /// Offsets the touch upward so the player rides above the fingertip. The
-    /// engine clamps targets into the playable rect, so top-edge taps are safe.
-    private func movementTarget(for location: CGPoint) -> Vector2 {
-        Vector2(location.x, location.y + touchTargetOffset)
+    private func isInSteeringZone(_ touch: UITouch) -> Bool {
+        guard let cameraNode else { return false }
+        let location = touch.location(in: cameraNode)
+        let dx = location.x - joystickCenter.x
+        let dy = location.y - joystickCenter.y
+        return dx * dx + dy * dy <= steeringZoneRadius * steeringZoneRadius
+    }
+
+    /// Console-style stick: direction = finger offset from the base center,
+    /// speed scales with deflection (full player speed at the rim).
+    private func updateJoystick(with touch: UITouch) {
+        guard let world, let cameraNode else { return }
+        let location = touch.location(in: cameraNode)
+        var dx = location.x - joystickCenter.x
+        var dy = location.y - joystickCenter.y
+        let distance = (dx * dx + dy * dy).squareRoot()
+        if distance > joystickRadius, distance > 0 {
+            dx *= joystickRadius / distance
+            dy *= joystickRadius / distance
+        }
+        joystickKnob?.position = CGPoint(x: dx, y: dy)
+
+        let deflection = min(1, distance / joystickRadius)
+        if deflection > 0.08, distance > 0 {
+            let direction = Vector2(dx, dy).normalized
+            world.playerControlVelocity = direction * (world.playerSpeed * deflection)
+        } else {
+            world.playerControlVelocity = nil // dead zone
+        }
     }
 
     private func endTouches(_ touches: Set<UITouch>) {
         for touch in touches {
-            if touchController.ended(touch) == .laser {
+            switch touchController.ended(touch) {
+            case .joystick:
+                world?.playerControlVelocity = nil
+                joystickKnob?.position = .zero
+            case .laser:
                 laserAimPoint = nil
+            case nil:
+                break
             }
-            // A lifted movement finger leaves its last target in place — a tap
-            // means "go there", so the player keeps gliding to it.
         }
     }
 

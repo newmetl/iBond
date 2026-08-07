@@ -14,21 +14,31 @@ final class EnemyTests: XCTestCase {
 
     // MARK: - Runner steering
 
-    func testRunnerWalksTowardPlayer() {
+    func testRunnerWalksTowardPlayerOnceActivated() {
         let world = World(size: Vector2(800, 800))
         world.addPlayer(at: Vector2(400, 400))
         let runner = world.addRunner(at: Vector2(400, 100))
         world.runnerSpeed = 100
+        world.activateRunner(runner)
         world.update(dt: 0.5)
         let pos = world.body(withID: runner)!.position
         XCTAssertEqual(pos.x, 400, accuracy: 1e-6)
         XCTAssertEqual(pos.y, 150, accuracy: 1) // moved 50pt toward the player
     }
 
+    func testRunnerWaitsUntilActivated() {
+        let world = World(size: Vector2(800, 800))
+        world.addPlayer(at: Vector2(400, 400))
+        let runner = world.addRunner(at: Vector2(400, 100))
+        world.update(dt: 1.0)
+        XCTAssertEqual(world.body(withID: runner)!.position, Vector2(400, 100))
+    }
+
     func testRunnerStopsWhenPlayerIsGone() {
         let world = World(size: Vector2(800, 800))
         world.addPlayer(at: Vector2(400, 400))
         let runner = world.addRunner(at: Vector2(400, 100))
+        world.activateRunner(runner)
         world.remove(bodyID: world.playerID!)
         world.update(dt: 0.5)
         let pos = world.body(withID: runner)!.position
@@ -39,11 +49,44 @@ final class EnemyTests: XCTestCase {
         let world = World(size: Vector2(800, 800))
         world.addPlayer(at: Vector2(400, 500))
         let runner = world.addRunner(at: Vector2(400, 100), radius: 14)
+        world.activateRunner(runner)
         world.addRock(at: Vector2(400, 300), radius: 40)
         for _ in 0..<600 { world.update(dt: 1.0 / 120.0) } // 5 seconds head-on
         let pos = world.body(withID: runner)!.position
         // Head-on into the rock: blocked at its surface (dead-center, no slide).
         XCTAssertLessThanOrEqual(pos.y, 300 - 40 - 14 + 1)
+    }
+
+    // MARK: - Direct player control (virtual joystick)
+
+    func testControlVelocityDrivesThePlayer() {
+        let world = World(size: Vector2(800, 800))
+        let player = world.addPlayer(at: Vector2(400, 400))
+        world.playerControlVelocity = Vector2(100, -50)
+        world.update(dt: 0.5)
+        let pos = world.body(withID: player)!.position
+        XCTAssertEqual(pos.x, 450, accuracy: 1e-6)
+        XCTAssertEqual(pos.y, 375, accuracy: 1e-6)
+    }
+
+    func testControlVelocityOverridesMoveTarget() {
+        let world = World(size: Vector2(800, 800))
+        let player = world.addPlayer(at: Vector2(400, 400))
+        world.moveTarget = Vector2(100, 400) // would go -x...
+        world.playerControlVelocity = Vector2(100, 0) // ...but control wins
+        world.update(dt: 0.5)
+        XCTAssertEqual(world.body(withID: player)!.position.x, 450, accuracy: 1e-6)
+    }
+
+    func testClearingControlVelocityStopsThePlayer() {
+        let world = World(size: Vector2(800, 800))
+        let player = world.addPlayer(at: Vector2(400, 400))
+        world.playerControlVelocity = Vector2(100, 0)
+        world.update(dt: 0.5)
+        world.playerControlVelocity = nil
+        world.update(dt: 0.5)
+        XCTAssertEqual(world.body(withID: player)!.position.x, 450, accuracy: 1e-6)
+        XCTAssertEqual(world.body(withID: player)!.velocity, .zero)
     }
 
     func testShooterStaysPutButIsShoveable() {

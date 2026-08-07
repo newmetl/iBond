@@ -8,6 +8,9 @@ public final class World {
 
     /// Where the player is currently heading; nil means stand still.
     public var moveTarget: Vector2?
+    /// Direct velocity control (virtual joystick). When non-nil it overrides
+    /// `moveTarget` entirely; the caller owns clamping to a sane speed.
+    public var playerControlVelocity: Vector2?
     /// Player movement speed in points per second.
     public var playerSpeed: Double = 320
     /// Exponential-ish velocity damping applied to hostiles so pushes fade out.
@@ -50,12 +53,22 @@ public final class World {
     }
 
     /// Adds a runner that chases the player and kills on touch (app layer).
+    /// Runners wait in place until `activateRunner(_:)` is called for them.
     @discardableResult
     public func addRunner(at position: Vector2, radius: Double = 14, mass: Double = 1) -> BodyID {
         let id = makeID()
         bodies.append(CircleBody(id: id, kind: .runner, position: position,
                                  velocity: .zero, radius: radius, mass: mass))
         return id
+    }
+
+    /// Runner IDs that have started chasing (one-way; set by the app when a
+    /// runner first becomes visible on screen).
+    public private(set) var activeRunnerIDs: Set<BodyID> = []
+
+    public func activateRunner(_ id: BodyID) {
+        guard body(withID: id)?.kind == .runner else { return }
+        activeRunnerIDs.insert(id)
     }
 
     /// Adds an immovable rock obstacle. Blocks circles and the laser.
@@ -139,6 +152,10 @@ public final class World {
 
     private func seekPlayer(dt: Double) {
         guard let pid = playerID, let idx = bodies.firstIndex(where: { $0.id == pid }) else { return }
+        if let control = playerControlVelocity {
+            bodies[idx].velocity = control
+            return
+        }
         guard var target = moveTarget else {
             // No destination: the player is kinematic, so collision impulses
             // must not leave it drifting.
@@ -163,12 +180,15 @@ public final class World {
         }
     }
 
-    /// Runners head straight for the player at `runnerSpeed`; with no player
-    /// they stand down. Set before integration each step, so collision shoves
-    /// still displace them but never permanently deflect the chase.
+    /// Activated runners head straight for the player at `runnerSpeed`; with
+    /// no player they stand down. Set before integration each step, so
+    /// collision shoves still displace them but never deflect the chase.
+    /// Un-activated runners wait in place (the app activates each runner the
+    /// first time it appears on screen).
     private func steerRunners() {
         let target = playerID.flatMap { body(withID: $0)?.position }
         for i in bodies.indices where bodies[i].kind == .runner {
+            guard activeRunnerIDs.contains(bodies[i].id) else { continue }
             guard let target else {
                 bodies[i].velocity = .zero
                 continue

@@ -49,3 +49,17 @@
   shooters spawned adjacent to rocks. Bank-shot, LOS, self-hit are
   engine-tested; telegraph timing and pickups verified by code review and
   awaiting on-device playtest.
+
+## Post-playtest revisions (same day)
+
+- **Controls**: virtual joystick (lower-left, camera-pinned; direction+deflection
+  = velocity via `World.playerControlVelocity`, dead zone 8%) replaces
+  tap-to-move/hold-to-follow; any touch starting outside the steering zone
+  aims/fires the laser (tap = burst, hold = continuous). Destination cross
+  removed. TouchController now classifies by start location.
+- **Runner activation**: runners wait in place until first visible on screen
+  (`World.activateRunner`, one-way), so they no longer converge on spawn.
+- **Shooter placement**: candidates with line of sight to the player's spawn
+  are rejected — shooters always start hidden behind cover.
+- **Telegraph**: 0.6s → 1.5s after on-device playtest feedback.
+- 70 engine tests.
