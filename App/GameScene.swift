@@ -34,18 +34,18 @@ final class GameScene: SKScene {
     private let npcRadius: Double = 14
 
     /// The map spans this many screens in each dimension; the camera scrolls.
-    private let mapScale: CGFloat = 2
+    private let mapScale: CGFloat = 3
     /// Camera follow box: the camera scrolls once the player crosses these
     /// margins. Generous side/top margins reveal enemies early; the bottom
     /// edge sits at 50% of the screen so downward movement scrolls from the
     /// center line (the corner controls live below it).
     private let cameraMarginX: CGFloat = 150
     private let cameraMarginTop: CGFloat = 230
-    private let litterCount = 90
+    private let litterCount = 200
 
-    private let shooterCount = 4
-    private let batteryDropCount = 2
-    private let runnerCount = 4
+    private let shooterCount = 8
+    private let batteryDropCount = 4
+    private let runnerCount = 8
     private let shooterMinPlayerDistance: Double = 300
     /// Runners start hunting immediately, so they spawn farther out than
     /// shooters — closer spawns ended games before the first screenshot.
@@ -65,8 +65,8 @@ final class GameScene: SKScene {
     private let fireZoneRadius: CGFloat = 100
     private let fireButtonCornerOffset = CGPoint(x: 110, y: 150)
 
-    private let rockCount = 3
-    private let mirrorCount = 2
+    private let rockCount = 16
+    private let mirrorCount = 8
     private let mirrorHalfLength: Double = 70
 
     private let touchController = TouchController()
