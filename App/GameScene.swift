@@ -19,6 +19,7 @@ final class GameScene: SKScene {
     private var cameraNode: SKCameraNode?
     private var joystickBase: SKShapeNode?
     private var joystickKnob: SKShapeNode?
+    private var fireButton: SKShapeNode?
 
     private var shooterAimStart: [BodyID: TimeInterval] = [:]
     private var shooterAimNodes: [BodyID: SKShapeNode] = [:]
@@ -53,12 +54,18 @@ final class GameScene: SKScene {
     private let steeringZoneRadius: CGFloat = 120
     private let joystickCornerOffset = CGPoint(x: 120, y: 140)
 
+    /// Fire button (lower-right): tap = burst, hold = continuous. The beam
+    /// fires along the player's current facing.
+    private let fireButtonRadius: CGFloat = 44
+    private let fireZoneRadius: CGFloat = 100
+    private let fireButtonCornerOffset = CGPoint(x: 110, y: 150)
+
     private let rockCount = 3
     private let mirrorCount = 2
     private let mirrorHalfLength: Double = 70
 
     private let touchController = TouchController()
-    private var laserAimPoint: CGPoint?   // set while the laser finger is down
+    private var fireButtonHeld = false
     private var laserNode: SKShapeNode?
     private var sparkNode: SKShapeNode?
 
@@ -80,12 +87,19 @@ final class GameScene: SKScene {
         // only change the viewport. Keep the HUD pinned inside the camera frame.
         batteryLabel?.position = CGPoint(x: 0, y: size.height / 2 - 80)
         joystickBase?.position = joystickCenter
+        fireButton?.position = fireButtonCenter
     }
 
     /// Joystick base center in camera coordinates (lower-left corner).
     private var joystickCenter: CGPoint {
         CGPoint(x: -size.width / 2 + joystickCornerOffset.x,
                 y: -size.height / 2 + joystickCornerOffset.y)
+    }
+
+    /// Fire button center in camera coordinates (lower-right corner).
+    private var fireButtonCenter: CGPoint {
+        CGPoint(x: size.width / 2 - fireButtonCornerOffset.x,
+                y: -size.height / 2 + fireButtonCornerOffset.y)
     }
 
     override func update(_ currentTime: TimeInterval) {
@@ -142,10 +156,11 @@ final class GameScene: SKScene {
         npcNodes = [:]
         joystickBase = nil
         joystickKnob = nil
+        fireButton = nil
         lastPlayerPosition = nil
         laserNode = nil
         sparkNode = nil
-        laserAimPoint = nil
+        fireButtonHeld = false
         batteryLabel = nil
         laserCharge = laserCapacity
         beamVisible = false
@@ -333,6 +348,16 @@ final class GameScene: SKScene {
         base.addChild(knob)
         joystickKnob = knob
 
+        // Fire button, pinned to the camera's lower-right corner.
+        let fire = SKShapeNode(circleOfRadius: fireButtonRadius)
+        fire.fillColor = SKColor(red: 1, green: 0.25, blue: 0.3, alpha: 0.22)
+        fire.strokeColor = SKColor(red: 1, green: 0.4, blue: 0.4, alpha: 0.6)
+        fire.lineWidth = 2
+        fire.position = fireButtonCenter
+        fire.zPosition = 3
+        camera.addChild(fire)
+        fireButton = fire
+
         let label = SKLabelNode(fontNamed: "Menlo-Bold")
         label.fontSize = 15
         label.fontColor = SKColor(white: 1, alpha: 0.85)
@@ -439,27 +464,23 @@ final class GameScene: SKScene {
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         for touch in touches {
-            switch touchController.began(touch, inSteeringZone: isInSteeringZone(touch)) {
-            case .joystick:
-                updateJoystick(with: touch)
-            case .laser:
-                laserAimPoint = touch.location(in: self)
-            case nil:
-                break
+            if isInSteeringZone(touch) {
+                if touchController.began(touch, as: .joystick) {
+                    updateJoystick(with: touch)
+                }
+            } else if isInFireZone(touch) {
+                if touchController.began(touch, as: .fire) {
+                    fireButtonHeld = true
+                    fireButton?.fillColor = SKColor(red: 1, green: 0.25, blue: 0.3, alpha: 0.45)
+                }
             }
+            // Touches on the map itself do nothing.
         }
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        for touch in touches {
-            switch touchController.role(of: touch) {
-            case .joystick:
-                updateJoystick(with: touch)
-            case .laser:
-                laserAimPoint = touch.location(in: self)
-            case nil:
-                break
-            }
+        for touch in touches where touchController.role(of: touch) == .joystick {
+            updateJoystick(with: touch)
         }
     }
 
@@ -492,6 +513,14 @@ final class GameScene: SKScene {
         return dx * dx + dy * dy <= steeringZoneRadius * steeringZoneRadius
     }
 
+    private func isInFireZone(_ touch: UITouch) -> Bool {
+        guard let cameraNode else { return false }
+        let location = touch.location(in: cameraNode)
+        let dx = location.x - fireButtonCenter.x
+        let dy = location.y - fireButtonCenter.y
+        return dx * dx + dy * dy <= fireZoneRadius * fireZoneRadius
+    }
+
     /// Console-style stick: direction = finger offset from the base center,
     /// speed scales with deflection (full player speed at the rim).
     private func updateJoystick(with touch: UITouch) {
@@ -521,8 +550,9 @@ final class GameScene: SKScene {
             case .joystick:
                 world?.playerControlVelocity = nil
                 joystickKnob?.position = .zero
-            case .laser:
-                laserAimPoint = nil
+            case .fire:
+                fireButtonHeld = false
+                fireButton?.fillColor = SKColor(red: 1, green: 0.25, blue: 0.3, alpha: 0.22)
             case nil:
                 break
             }
@@ -533,17 +563,16 @@ final class GameScene: SKScene {
 
     private func processLaser() {
         guard let world else { return }
-        guard laserCharge > 0, let aim = laserAimPoint,
-              let beam = world.castLaserPath(through: Vector2(aim.x, aim.y)),
+        // The beam fires along the player's current facing (the aim line the
+        // joystick steers) — the fire button has no direction of its own.
+        let facing = playerNode.map { Vector2(cos(Double($0.zRotation)), sin(Double($0.zRotation))) }
+        guard laserCharge > 0, fireButtonHeld, let facing,
+              let player = world.playerID.flatMap({ world.body(withID: $0) }),
+              let beam = world.castLaserPath(through: player.position + facing * 100),
               let endPoint = beam.points.last, beam.points.count >= 2 else {
             fadeOutBeamIfNeeded()
             return
         }
-
-        // Rotate the aim line to the outgoing firing direction — the first
-        // beam segment, not the (possibly mirror-bent) final one.
-        let direction = beam.points[1] - beam.points[0]
-        rotatePlayer(toward: CGFloat(atan2(direction.y, direction.x)))
 
         // Polyline through every bounce point to the final hit / bounds exit.
         let path = CGMutablePath()
@@ -677,7 +706,7 @@ final class GameScene: SKScene {
         guard gameStarted, let world, let pid = world.playerID else { return }
         gameStarted = false
         world.remove(bodyID: pid) // runners stand down without a target
-        laserAimPoint = nil
+        fireButtonHeld = false
         fadeOutBeamIfNeeded()
         for node in shooterAimNodes.values { node.isHidden = true }
         if let node = playerNode {

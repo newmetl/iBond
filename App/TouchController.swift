@@ -1,36 +1,37 @@
 import UIKit
 
-/// Assigns roles to touches by where they START: inside the steering zone the
-/// touch drives the virtual joystick; anywhere else it fires the laser. Roles
-/// are fixed at touch-down; UITouch objects are never retained (Apple's rule)
-/// — only their identities.
+/// Assigns roles to touches by which control zone they START in: the steering
+/// zone drives the virtual joystick, the fire zone drives the laser button.
+/// Touches elsewhere are ignored. Roles are fixed at touch-down; UITouch
+/// objects are never retained (Apple's rule) — only their identities.
 final class TouchController {
     enum Role {
         case joystick
-        case laser
+        case fire
     }
 
     private var joystickID: ObjectIdentifier?
-    private var laserID: ObjectIdentifier?
+    private var fireID: ObjectIdentifier?
 
-    /// Returns the role assigned to a newly began touch, or nil if that role
-    /// is already taken (extra fingers are ignored).
-    func began(_ touch: UITouch, inSteeringZone: Bool) -> Role? {
+    /// Claims the role for a newly began touch. Returns false when that role
+    /// is already held by another finger (the extra touch is ignored).
+    func began(_ touch: UITouch, as role: Role) -> Bool {
         let id = ObjectIdentifier(touch)
-        if inSteeringZone {
-            guard joystickID == nil else { return nil }
+        switch role {
+        case .joystick:
+            guard joystickID == nil else { return false }
             joystickID = id
-            return .joystick
+        case .fire:
+            guard fireID == nil else { return false }
+            fireID = id
         }
-        guard laserID == nil else { return nil }
-        laserID = id
-        return .laser
+        return true
     }
 
     func role(of touch: UITouch) -> Role? {
         let id = ObjectIdentifier(touch)
         if id == joystickID { return .joystick }
-        if id == laserID { return .laser }
+        if id == fireID { return .fire }
         return nil
     }
 
@@ -42,9 +43,9 @@ final class TouchController {
             joystickID = nil
             return .joystick
         }
-        if id == laserID {
-            laserID = nil
-            return .laser
+        if id == fireID {
+            fireID = nil
+            return .fire
         }
         return nil
     }
