@@ -20,6 +20,7 @@ final class GameScene: SKScene {
     private var joystickBase: SKShapeNode?
     private var joystickKnob: SKShapeNode?
     private var fireButton: SKShapeNode?
+    private var cameraDebugRect: SKShapeNode?
 
     private var shooterAimStart: [BodyID: TimeInterval] = [:]
     private var shooterAimNodes: [BodyID: SKShapeNode] = [:]
@@ -35,7 +36,14 @@ final class GameScene: SKScene {
 
     /// The map spans this many screens in each dimension; the camera scrolls.
     private let mapScale: CGFloat = 2
-    private let cameraEdgeMargin: CGFloat = 130
+    /// Camera follow box: the camera scrolls once the player crosses these
+    /// margins. Generous side/top margins reveal enemies early; the bottom
+    /// edge sits at 50% of the screen so downward movement scrolls from the
+    /// center line (the corner controls live below it).
+    private let cameraMarginX: CGFloat = 150
+    private let cameraMarginTop: CGFloat = 230
+    /// Debug: draws the follow box on screen while tuning. Remove when done.
+    private let showCameraDebugRect = true
     private let litterCount = 90
 
     private let shooterCount = 4
@@ -88,6 +96,7 @@ final class GameScene: SKScene {
         batteryLabel?.position = CGPoint(x: 0, y: size.height / 2 - 80)
         joystickBase?.position = joystickCenter
         fireButton?.position = fireButtonCenter
+        updateCameraDebugRect()
     }
 
     /// Joystick base center in camera coordinates (lower-left corner).
@@ -157,6 +166,7 @@ final class GameScene: SKScene {
         joystickBase = nil
         joystickKnob = nil
         fireButton = nil
+        cameraDebugRect = nil
         lastPlayerPosition = nil
         laserNode = nil
         sparkNode = nil
@@ -347,6 +357,16 @@ final class GameScene: SKScene {
         knob.lineWidth = 1
         base.addChild(knob)
         joystickKnob = knob
+
+        if showCameraDebugRect {
+            let debugRect = SKShapeNode()
+            debugRect.strokeColor = SKColor(red: 1, green: 0.9, blue: 0.2, alpha: 0.5)
+            debugRect.lineWidth = 1
+            debugRect.zPosition = 4
+            camera.addChild(debugRect)
+            cameraDebugRect = debugRect
+            updateCameraDebugRect()
+        }
 
         // Fire button, pinned to the camera's lower-right corner.
         let fire = SKShapeNode(circleOfRadius: fireButtonRadius)
@@ -609,23 +629,38 @@ final class GameScene: SKScene {
 
     // MARK: - Camera
 
-    /// The camera stays put until the player nears the screen edge, then moves
-    /// just enough to keep them inside the margin box — clamped to the map.
+    /// The camera stays put while the player is inside the follow box, then
+    /// moves just enough to keep them on its edge — clamped to the map.
     private func updateCamera() {
         guard let world, let cameraNode,
               let player = world.playerID.flatMap({ world.body(withID: $0) }) else { return }
         var cam = cameraNode.position
         let halfW = size.width / 2
         let halfH = size.height / 2
+        let marginBottom = halfH // box bottom = screen center line
         let px = CGFloat(player.position.x)
         let py = CGFloat(player.position.y)
-        if px > cam.x + halfW - cameraEdgeMargin { cam.x = px - (halfW - cameraEdgeMargin) }
-        if px < cam.x - halfW + cameraEdgeMargin { cam.x = px + (halfW - cameraEdgeMargin) }
-        if py > cam.y + halfH - cameraEdgeMargin { cam.y = py - (halfH - cameraEdgeMargin) }
-        if py < cam.y - halfH + cameraEdgeMargin { cam.y = py + (halfH - cameraEdgeMargin) }
+        if px > cam.x + halfW - cameraMarginX { cam.x = px - (halfW - cameraMarginX) }
+        if px < cam.x - halfW + cameraMarginX { cam.x = px + (halfW - cameraMarginX) }
+        if py > cam.y + halfH - cameraMarginTop { cam.y = py - (halfH - cameraMarginTop) }
+        if py < cam.y - halfH + marginBottom { cam.y = py + (halfH - marginBottom) }
         cam.x = min(max(cam.x, halfW), CGFloat(world.size.x) - halfW)
         cam.y = min(max(cam.y, halfH), CGFloat(world.size.y) - halfH)
         cameraNode.position = cam
+    }
+
+    /// Debug-only visualization of the follow box (see showCameraDebugRect).
+    private func updateCameraDebugRect() {
+        guard showCameraDebugRect, let cameraDebugRect else { return }
+        let halfW = size.width / 2
+        let halfH = size.height / 2
+        let left = -halfW + cameraMarginX
+        let right = halfW - cameraMarginX
+        let top = halfH - cameraMarginTop
+        let bottom: CGFloat = 0 // screen center line
+        let path = CGMutablePath()
+        path.addRect(CGRect(x: left, y: bottom, width: right - left, height: top - bottom))
+        cameraDebugRect.path = path
     }
 
     private func isOnScreen(position: Vector2, radius: Double) -> Bool {
