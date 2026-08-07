@@ -80,11 +80,14 @@ final class MirrorTests: XCTestCase {
     }
 
     func testBounceLimitStopsInfiniteReflection() {
-        // Two facing parallel mirrors trap the beam; the path must terminate.
+        // Two facing parallel mirrors trap the beam. Fired at a slight upward
+        // angle, the zig-zag ascends past the player's own circle (a straight
+        // back-and-forth would self-hit, which is its own test) and must
+        // terminate at the bounce cap.
         let world = makeWorld()
-        world.addMirror(from: Vector2(150, 150), to: Vector2(150, 250))
-        world.addMirror(from: Vector2(50, 150), to: Vector2(50, 250))
-        let path = world.castLaserPath(through: Vector2(150, 200))!
+        world.addMirror(from: Vector2(150, 100), to: Vector2(150, 300))
+        world.addMirror(from: Vector2(50, 100), to: Vector2(50, 300))
+        let path = world.castLaserPath(through: Vector2(150, 210))!
         XCTAssertNil(path.bodyID)
         // origin + maxBounces bounce points + terminal point
         XCTAssertLessThanOrEqual(path.points.count, World.maxLaserBounces + 2)

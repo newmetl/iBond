@@ -65,6 +65,7 @@ struct GameView: View {
         .onAppear {
             scene.onAllNPCsEliminated = { phase = .finished }
             scene.onBatteryEmpty = { phase = .gameOver }
+            scene.onPlayerKilled = { phase = .gameOver }
         }
     }
 }

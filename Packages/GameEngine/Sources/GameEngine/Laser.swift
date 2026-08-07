@@ -43,7 +43,10 @@ public extension World {
         while true {
             var bodyT = Double.infinity
             var bodyHit: BodyID?
-            for body in bodies where body.id != pid {
+            // The first segment starts inside the player's own circle, so the
+            // player is excluded there — but a reflected segment CAN hit the
+            // player (self-hit is the app's game-over case).
+            for body in bodies where body.id != pid || bounces > 0 {
                 if let t = Self.rayCircleIntersection(origin: origin, direction: direction,
                                                       center: body.position, radius: body.radius),
                    t < bodyT {
@@ -85,6 +88,39 @@ public extension World {
             points.append(boundsExit(origin: origin, direction: direction))
             return LaserPath(points: points, bodyID: nil)
         }
+    }
+
+    /// True when `viewer` can see `target` along a straight line — nothing
+    /// (no other body, rock, or mirror) intersects the segment between their
+    /// centers before the target's surface. Mirrors block sight; they don't
+    /// bend it.
+    func hasLineOfSight(from viewer: BodyID, to target: BodyID) -> Bool {
+        guard let from = body(withID: viewer), let to = body(withID: target) else { return false }
+        let origin = from.position
+        let toTarget = to.position - origin
+        let distance = toTarget.length
+        guard distance > .ulpOfOne else { return true }
+        let direction = toTarget / distance
+
+        guard let targetT = Self.rayCircleIntersection(origin: origin, direction: direction,
+                                                       center: to.position, radius: to.radius) else {
+            return false
+        }
+        for body in bodies where body.id != viewer && body.id != target {
+            if let t = Self.rayCircleIntersection(origin: origin, direction: direction,
+                                                  center: body.position, radius: body.radius),
+               t < targetT {
+                return false
+            }
+        }
+        for mirror in mirrors {
+            if let (t, _) = Self.raySegmentIntersection(origin: origin, direction: direction,
+                                                        start: mirror.start, end: mirror.end),
+               t < targetT {
+                return false
+            }
+        }
+        return true
     }
 
     /// Single-hit view of `castLaserPath`: the final endpoint and struck body.

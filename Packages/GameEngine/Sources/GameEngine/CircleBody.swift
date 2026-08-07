@@ -6,6 +6,19 @@ public struct CircleBody: Identifiable, Equatable {
         case npc
         /// Immovable obstacle: blocks circles and the laser, never moves.
         case rock
+        /// Stationary hostile that ambushes the player (aiming/firing is
+        /// driven by the app layer; the engine just hosts the body).
+        case shooter
+        /// Hostile that steers toward the player; kills on touch (app layer).
+        case runner
+
+        /// Hostile kinds are laser-killable and count toward the win condition.
+        public var isHostile: Bool {
+            switch self {
+            case .npc, .shooter, .runner: return true
+            case .player, .rock: return false
+            }
+        }
     }
 
     /// Static bodies take no integration, damping, or collision response.

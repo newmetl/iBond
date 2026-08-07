@@ -10,8 +10,10 @@ public final class World {
     public var moveTarget: Vector2?
     /// Player movement speed in points per second.
     public var playerSpeed: Double = 320
-    /// Exponential-ish velocity damping applied to NPCs so pushes fade out.
+    /// Exponential-ish velocity damping applied to hostiles so pushes fade out.
     public var npcDamping: Double = 4
+    /// Runner chase speed in points per second (~60% of the default playerSpeed).
+    public var runnerSpeed: Double = 192
 
     private var nextID: BodyID = 0
 
@@ -34,6 +36,24 @@ public final class World {
     public func addNPC(at position: Vector2, radius: Double = 14, mass: Double = 1) -> BodyID {
         let id = makeID()
         bodies.append(CircleBody(id: id, kind: .npc, position: position,
+                                 velocity: .zero, radius: radius, mass: mass))
+        return id
+    }
+
+    /// Adds a stationary ambusher. Aiming/firing logic lives in the app layer.
+    @discardableResult
+    public func addShooter(at position: Vector2, radius: Double = 14, mass: Double = 1) -> BodyID {
+        let id = makeID()
+        bodies.append(CircleBody(id: id, kind: .shooter, position: position,
+                                 velocity: .zero, radius: radius, mass: mass))
+        return id
+    }
+
+    /// Adds a runner that chases the player and kills on touch (app layer).
+    @discardableResult
+    public func addRunner(at position: Vector2, radius: Double = 14, mass: Double = 1) -> BodyID {
+        let id = makeID()
+        bodies.append(CircleBody(id: id, kind: .runner, position: position,
                                  velocity: .zero, radius: radius, mass: mass))
         return id
     }
@@ -102,6 +122,7 @@ public final class World {
     /// (the app's fixed-step accumulator guarantees this).
     public func update(dt: Double) {
         seekPlayer(dt: dt)
+        steerRunners()
         integrate(dt: dt)
         resolveCollisions()
         resolveMirrorCollisions()
@@ -139,6 +160,21 @@ public final class World {
             moveTarget = nil
         } else {
             bodies[idx].velocity = toTarget.normalized * playerSpeed
+        }
+    }
+
+    /// Runners head straight for the player at `runnerSpeed`; with no player
+    /// they stand down. Set before integration each step, so collision shoves
+    /// still displace them but never permanently deflect the chase.
+    private func steerRunners() {
+        let target = playerID.flatMap { body(withID: $0)?.position }
+        for i in bodies.indices where bodies[i].kind == .runner {
+            guard let target else {
+                bodies[i].velocity = .zero
+                continue
+            }
+            let toPlayer = target - bodies[i].position
+            bodies[i].velocity = toPlayer.length > 1 ? toPlayer.normalized * runnerSpeed : .zero
         }
     }
 
@@ -227,7 +263,7 @@ public final class World {
 
     private func applyDamping(dt: Double) {
         let factor = max(0, 1 - npcDamping * dt)
-        for i in bodies.indices where bodies[i].kind == .npc {
+        for i in bodies.indices where bodies[i].kind.isHostile {
             bodies[i].velocity *= factor
         }
     }

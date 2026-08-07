@@ -7,6 +7,9 @@ final class GameScene: SKScene {
     var onAllNPCsEliminated: (() -> Void)?
     /// Fired when the laser battery runs out while NPCs are still alive.
     var onBatteryEmpty: (() -> Void)?
+    /// Fired when the player dies — shot by a shooter, touched by a runner,
+    /// or hit by their own reflected laser.
+    var onPlayerKilled: (() -> Void)?
 
     private var gameStarted = false
     private var world: World?
@@ -14,6 +17,12 @@ final class GameScene: SKScene {
     private var npcNodes: [BodyID: SKShapeNode] = [:]
     private var targetCrossNode: SKShapeNode?
     private var lastPlayerPosition: CGPoint?
+    private var cameraNode: SKCameraNode?
+
+    private var shooterAimStart: [BodyID: TimeInterval] = [:]
+    private var shooterAimNodes: [BodyID: SKShapeNode] = [:]
+    private var batteryCarrierIDs: Set<BodyID> = []
+    private var batteryPickups: [(position: CGPoint, node: SKShapeNode)] = []
 
     private var lastUpdateTime: TimeInterval?
     private var accumulator: Double = 0
@@ -21,7 +30,21 @@ final class GameScene: SKScene {
 
     private let playerRadius: Double = 16
     private let npcRadius: Double = 14
-    private let npcCount = 8
+
+    /// The map spans this many screens in each dimension; the camera scrolls.
+    private let mapScale: CGFloat = 2
+    private let cameraEdgeMargin: CGFloat = 130
+    private let litterCount = 90
+
+    private let shooterCount = 4
+    private let batteryDropCount = 2
+    private let runnerCount = 4
+    private let shooterMinPlayerDistance: Double = 300
+    /// Runners start hunting immediately, so they spawn farther out than
+    /// shooters — closer spawns ended games before the first screenshot.
+    private let runnerMinPlayerDistance: Double = 520
+    /// Seconds a shooter aims (green telegraph line) before the killing shot.
+    private let telegraphDuration: TimeInterval = 0.6
 
     /// Movement targets sit this far above the touch point so the player
     /// circle stays visible above the fingertip instead of hiding under it.
@@ -50,10 +73,9 @@ final class GameScene: SKScene {
     }
 
     override func didChangeSize(_ oldSize: CGSize) {
-        // Rotation / first layout: keep engine bounds in sync; bodies re-clamp
-        // on the next update.
-        world?.size = Vector2(size.width, size.height)
-        batteryLabel?.position = CGPoint(x: size.width / 2, y: size.height - 80)
+        // The map is larger than the screen and fixed at game start — resizes
+        // only change the viewport. Keep the HUD pinned inside the camera frame.
+        batteryLabel?.position = CGPoint(x: 0, y: size.height / 2 - 80)
     }
 
     override func update(_ currentTime: TimeInterval) {
@@ -76,7 +98,11 @@ final class GameScene: SKScene {
         }
 
         syncNodes()
+        updateCamera()
         processLaser()
+        processShooters(currentTime)
+        checkRunnerTouches()
+        checkBatteryPickups()
         updateBatteryLabel()
     }
 
@@ -86,6 +112,8 @@ final class GameScene: SKScene {
     /// new one (player centered, NPCs re-randomized). Called from the menu.
     func startGame() {
         removeAllChildren()
+        camera = nil
+        cameraNode = nil
         world = nil
         playerNode = nil
         npcNodes = [:]
@@ -97,6 +125,10 @@ final class GameScene: SKScene {
         batteryLabel = nil
         laserCharge = laserCapacity
         beamVisible = false
+        shooterAimStart = [:]
+        shooterAimNodes = [:]
+        batteryCarrierIDs = []
+        batteryPickups = []
         gameStarted = true
         ensureWorld() // builds now if the scene is laid out; else on next update
     }
@@ -105,37 +137,95 @@ final class GameScene: SKScene {
     /// created lazily on the first sized update after the game starts.
     private func ensureWorld() {
         guard gameStarted, world == nil, size.width > 0, size.height > 0 else { return }
-        let world = World(size: Vector2(size.width, size.height))
+        let mapSize = Vector2(size.width * mapScale, size.height * mapScale)
+        let world = World(size: mapSize)
 
-        world.addPlayer(at: Vector2(size.width / 2, size.height / 2), radius: playerRadius)
+        let playerStart = mapSize * 0.5
+        world.addPlayer(at: playerStart, radius: playerRadius)
         var rng = SystemRandomNumberGenerator()
 
-        // Mirrors first, then rocks, then NPCs — each placement pass avoids
+        // Mirrors first, then rocks, then enemies — each placement pass avoids
         // everything placed before it (spawn sampling checks bodies + mirrors).
-        let middle = Rect(min: Vector2(size.width * 0.15, size.height * 0.28),
-                          max: Vector2(size.width * 0.85, size.height * 0.72))
+        let inset = 120.0
+        let field = Rect(min: Vector2(inset, inset),
+                         max: Vector2(mapSize.x - inset, mapSize.y - inset))
         for _ in 0..<mirrorCount {
             guard let center = world.randomFreePosition(radius: mirrorHalfLength + 10,
-                                                        in: middle, using: &rng) else { break }
+                                                        in: field, using: &rng) else { break }
             let angle = Double.random(in: 0..<Double.pi, using: &rng)
             let along = Vector2(cos(angle), sin(angle)) * mirrorHalfLength
             world.addMirror(from: center - along, to: center + along)
         }
         for _ in 0..<rockCount {
-            let radius = Double.random(in: 38...52, using: &rng)
-            guard let position = world.randomFreePosition(radius: radius, in: middle,
+            let radius = Double.random(in: 38...56, using: &rng)
+            guard let position = world.randomFreePosition(radius: radius, in: field,
                                                           using: &rng) else { break }
             world.addRock(at: position, radius: radius)
         }
-        for _ in 0..<npcCount {
-            guard let position = world.randomFreePosition(radius: npcRadius, using: &rng) else { break }
-            world.addNPC(at: position, radius: npcRadius)
+
+        // Shooters lurk right next to rocks (their cover), never near the
+        // player's spawn. The first `batteryDropCount` carry spare batteries.
+        let rocks = world.rockIDs.compactMap { world.body(withID: $0) }
+        var placedShooters = 0
+        var attempts = 0
+        while placedShooters < shooterCount, attempts < 300, let rock = rocks.randomElement(using: &rng) {
+            attempts += 1
+            let angle = Double.random(in: 0..<(2 * .pi), using: &rng)
+            let dist = rock.radius + npcRadius + Double.random(in: 4...26, using: &rng)
+            let candidate = rock.position + Vector2(cos(angle), sin(angle)) * dist
+            guard candidate.x > 20, candidate.x < mapSize.x - 20,
+                  candidate.y > 20, candidate.y < mapSize.y - 20,
+                  candidate.distance(to: playerStart) > shooterMinPlayerDistance,
+                  world.bodies.allSatisfy({ $0.position.distance(to: candidate) >= $0.radius + npcRadius + 6 })
+            else { continue }
+            let id = world.addShooter(at: candidate, radius: npcRadius)
+            if batteryCarrierIDs.count < batteryDropCount { batteryCarrierIDs.insert(id) }
+            placedShooters += 1
         }
+
+        var placedRunners = 0
+        attempts = 0
+        while placedRunners < runnerCount, attempts < 300 {
+            attempts += 1
+            guard let position = world.randomFreePosition(radius: npcRadius, using: &rng),
+                  position.distance(to: playerStart) > runnerMinPlayerDistance else { continue }
+            world.addRunner(at: position, radius: npcRadius)
+            placedRunners += 1
+        }
+
         self.world = world
         buildNodes(for: world)
     }
 
     private func buildNodes(for world: World) {
+        // Camera: follows the player near screen edges; carries the HUD.
+        let camera = SKCameraNode()
+        camera.position = CGPoint(x: world.size.x / 2, y: world.size.y / 2)
+        addChild(camera)
+        self.camera = camera
+        cameraNode = camera
+
+        // Decorative ground litter — small translucent stones/rubbish that
+        // make the camera scroll visible. Purely cosmetic, no interaction.
+        for _ in 0..<litterCount {
+            let litter: SKShapeNode
+            if Bool.random() {
+                litter = SKShapeNode(circleOfRadius: CGFloat(Double.random(in: 1.5...3.5)))
+            } else {
+                litter = SKShapeNode(rectOf: CGSize(width: Double.random(in: 3...7),
+                                                    height: Double.random(in: 2...5)))
+                litter.zRotation = CGFloat(Double.random(in: 0..<(2 * .pi)))
+            }
+            let tone = Double.random(in: 0.5...0.75)
+            litter.fillColor = SKColor(red: tone, green: tone * 0.95, blue: tone * 0.85,
+                                       alpha: Double.random(in: 0.12...0.28))
+            litter.strokeColor = .clear
+            litter.position = CGPoint(x: Double.random(in: 0...world.size.x),
+                                      y: Double.random(in: 0...world.size.y))
+            litter.zPosition = -2
+            addChild(litter)
+        }
+
         let player = makeCircleNode(radius: playerRadius,
                                     fill: SKColor(red: 0.2, green: 0.85, blue: 1, alpha: 1))
         player.zPosition = 1 // above NPCs so overlap during shoves renders stably
@@ -143,12 +233,24 @@ final class GameScene: SKScene {
         addChild(player)
         playerNode = player
 
-        for body in world.bodies where body.kind == .npc {
-            let node = makeCircleNode(radius: npcRadius,
-                                      fill: SKColor(red: 1, green: 0.45, blue: 0.35, alpha: 1))
+        for body in world.bodies where body.kind.isHostile {
+            let fill: SKColor = body.kind == .runner
+                ? SKColor(red: 0.75, green: 0.42, blue: 1, alpha: 1)  // purple: chases
+                : SKColor(red: 1, green: 0.45, blue: 0.35, alpha: 1)  // red: shoots
+            let node = makeCircleNode(radius: body.radius, fill: fill)
             node.zPosition = 0
             addChild(node)
             npcNodes[body.id] = node
+        }
+
+        for body in world.bodies where body.kind == .shooter {
+            let aim = SKShapeNode()
+            aim.strokeColor = SKColor(red: 0.3, green: 1, blue: 0.4, alpha: 0.55)
+            aim.lineWidth = 1
+            aim.isHidden = true
+            aim.zPosition = -0.5
+            addChild(aim)
+            shooterAimNodes[body.id] = aim
         }
 
         for body in world.bodies where body.kind == .rock {
@@ -201,9 +303,9 @@ final class GameScene: SKScene {
         let label = SKLabelNode(fontNamed: "Menlo-Bold")
         label.fontSize = 15
         label.fontColor = SKColor(white: 1, alpha: 0.85)
-        label.position = CGPoint(x: size.width / 2, y: size.height - 80)
+        label.position = CGPoint(x: 0, y: size.height / 2 - 80)
         label.zPosition = 3
-        addChild(label)
+        camera.addChild(label) // HUD rides the camera, not the map
         batteryLabel = label
     }
 
@@ -291,7 +393,7 @@ final class GameScene: SKScene {
                 }
                 lastPlayerPosition = position
                 playerNode?.position = position
-            case .npc:
+            case .npc, .shooter, .runner:
                 npcNodes[body.id]?.position = CGPoint(x: body.position.x, y: body.position.y)
             case .rock:
                 break // static; the node was positioned once at build time
@@ -401,21 +503,179 @@ final class GameScene: SKScene {
         sparkNode?.position = CGPoint(x: endPoint.x, y: endPoint.y)
         showBeamNodes()
 
-        // Only NPCs die — rocks just absorb the beam.
-        if let victimID = beam.bodyID, world.body(withID: victimID)?.kind == .npc {
-            kill(npcID: victimID, at: endPoint)
+        if let victimID = beam.bodyID {
+            if victimID == world.playerID {
+                // A reflected beam looped back into the player: self-hit.
+                killPlayer()
+            } else if world.body(withID: victimID)?.kind.isHostile == true {
+                kill(npcID: victimID, at: endPoint)
+            }
+            // Rocks just absorb the beam.
         }
 
         // The beam rendered this frame, so it drains the battery. This runs
         // after the kill so a last-kill-on-last-drop tie counts as a win.
         laserCharge = max(0, laserCharge - frameDt)
         if laserCharge <= 0, gameStarted,
-           world.bodies.contains(where: { $0.kind == .npc }) {
+           world.bodies.contains(where: { $0.kind.isHostile }) {
             gameStarted = false
             fadeOutBeamIfNeeded()
             DispatchQueue.main.async { [weak self] in
                 self?.onBatteryEmpty?()
             }
+        }
+    }
+
+    // MARK: - Camera
+
+    /// The camera stays put until the player nears the screen edge, then moves
+    /// just enough to keep them inside the margin box — clamped to the map.
+    private func updateCamera() {
+        guard let world, let cameraNode,
+              let player = world.playerID.flatMap({ world.body(withID: $0) }) else { return }
+        var cam = cameraNode.position
+        let halfW = size.width / 2
+        let halfH = size.height / 2
+        let px = CGFloat(player.position.x)
+        let py = CGFloat(player.position.y)
+        if px > cam.x + halfW - cameraEdgeMargin { cam.x = px - (halfW - cameraEdgeMargin) }
+        if px < cam.x - halfW + cameraEdgeMargin { cam.x = px + (halfW - cameraEdgeMargin) }
+        if py > cam.y + halfH - cameraEdgeMargin { cam.y = py - (halfH - cameraEdgeMargin) }
+        if py < cam.y - halfH + cameraEdgeMargin { cam.y = py + (halfH - cameraEdgeMargin) }
+        cam.x = min(max(cam.x, halfW), CGFloat(world.size.x) - halfW)
+        cam.y = min(max(cam.y, halfH), CGFloat(world.size.y) - halfH)
+        cameraNode.position = cam
+    }
+
+    private func isOnScreen(position: Vector2, radius: Double) -> Bool {
+        guard let cameraNode else { return false }
+        return abs(position.x - cameraNode.position.x) <= size.width / 2 + radius
+            && abs(position.y - cameraNode.position.y) <= size.height / 2 + radius
+    }
+
+    // MARK: - Enemies
+
+    /// Shooters aim while they're on screen AND have line of sight; after the
+    /// telegraph they fire the killing shot. Losing sight resets the aim.
+    private func processShooters(_ currentTime: TimeInterval) {
+        guard let world else { return }
+        guard gameStarted, let pid = world.playerID,
+              let player = world.body(withID: pid) else {
+            for node in shooterAimNodes.values { node.isHidden = true }
+            return
+        }
+        for body in world.bodies where body.kind == .shooter {
+            let aimNode = shooterAimNodes[body.id]
+            let exposed = isOnScreen(position: body.position, radius: body.radius)
+                && world.hasLineOfSight(from: body.id, to: pid)
+            guard exposed else {
+                shooterAimStart[body.id] = nil
+                aimNode?.isHidden = true
+                continue
+            }
+
+            let start = shooterAimStart[body.id] ?? currentTime
+            shooterAimStart[body.id] = start
+
+            let path = CGMutablePath()
+            path.move(to: CGPoint(x: body.position.x, y: body.position.y))
+            path.addLine(to: CGPoint(x: player.position.x, y: player.position.y))
+            aimNode?.path = path
+            aimNode?.isHidden = false
+
+            if currentTime - start >= telegraphDuration {
+                fireShooterBeam(from: body.position, to: player.position)
+                killPlayer()
+                return
+            }
+        }
+    }
+
+    /// The lethal green flash a shooter leaves on screen when it fires.
+    private func fireShooterBeam(from: Vector2, to: Vector2) {
+        let path = CGMutablePath()
+        path.move(to: CGPoint(x: from.x, y: from.y))
+        path.addLine(to: CGPoint(x: to.x, y: to.y))
+        let beam = SKShapeNode(path: path)
+        beam.strokeColor = SKColor(red: 0.25, green: 1, blue: 0.4, alpha: 1)
+        beam.lineWidth = 2.5
+        beam.glowWidth = 4
+        beam.zPosition = 1.5
+        addChild(beam)
+        beam.run(.sequence([
+            .wait(forDuration: 0.15),
+            .fadeOut(withDuration: 0.4),
+            .removeFromParent(),
+        ]))
+    }
+
+    private func checkRunnerTouches() {
+        guard gameStarted, let world, let pid = world.playerID,
+              let player = world.body(withID: pid) else { return }
+        for body in world.bodies where body.kind == .runner {
+            if body.position.distance(to: player.position) <= body.radius + player.radius + 0.5 {
+                killPlayer()
+                return
+            }
+        }
+    }
+
+    /// Shared death path: shooter hit, runner touch, or reflected self-hit.
+    private func killPlayer() {
+        guard gameStarted, let world, let pid = world.playerID else { return }
+        gameStarted = false
+        world.remove(bodyID: pid) // runners stand down without a target
+        laserAimPoint = nil
+        fadeOutBeamIfNeeded()
+        for node in shooterAimNodes.values { node.isHidden = true }
+        if let node = playerNode {
+            node.run(.sequence([
+                .group([
+                    .scale(to: 1.6, duration: 0.2),
+                    .fadeOut(withDuration: 0.2),
+                ]),
+                .removeFromParent(),
+            ]))
+            playerNode = nil
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            self?.onPlayerKilled?()
+        }
+    }
+
+    // MARK: - Battery pickups
+
+    private func spawnBatteryPickup(at position: Vector2) {
+        let node = SKShapeNode(rectOf: CGSize(width: 12, height: 18), cornerRadius: 3)
+        node.fillColor = SKColor(red: 0.25, green: 0.9, blue: 0.4, alpha: 0.95)
+        node.strokeColor = .white
+        node.lineWidth = 1
+        node.glowWidth = 3
+        node.zPosition = 0.5
+        node.position = CGPoint(x: position.x, y: position.y)
+        node.run(.repeatForever(.sequence([
+            .scale(to: 1.15, duration: 0.4),
+            .scale(to: 0.9, duration: 0.4),
+        ])))
+        addChild(node)
+        batteryPickups.append((node.position, node))
+    }
+
+    private func checkBatteryPickups() {
+        guard gameStarted, let world, let pid = world.playerID,
+              let player = world.body(withID: pid) else { return }
+        batteryPickups.removeAll { pickup in
+            let distance = player.position.distance(to: Vector2(pickup.position.x, pickup.position.y))
+            guard distance <= player.radius + 14 else { return false }
+            laserCharge = laserCapacity // full recharge
+            pickup.node.run(.sequence([
+                .group([
+                    .scale(to: 1.8, duration: 0.2),
+                    .fadeOut(withDuration: 0.2),
+                ]),
+                .removeFromParent(),
+            ]))
+            return true
         }
     }
 
@@ -442,6 +702,7 @@ final class GameScene: SKScene {
     /// Instant kill: remove from the simulation immediately, let the node play
     /// a short grow-and-fade before leaving the scene.
     private func kill(npcID: BodyID, at hitPoint: Vector2) {
+        let dropPosition = world?.body(withID: npcID)?.position
         world?.remove(bodyID: npcID)
 
         // Same impact spark as at the world's edge, as a short burst — the NPC
@@ -451,17 +712,25 @@ final class GameScene: SKScene {
         addChild(burst)
         burst.run(.sequence([.fadeOut(withDuration: 0.25), .removeFromParent()]))
 
-        guard let node = npcNodes.removeValue(forKey: npcID) else { return }
-        node.run(.sequence([
-            .group([
-                .scale(to: 1.6, duration: 0.15),
-                .fadeOut(withDuration: 0.15),
-            ]),
-            .removeFromParent(),
-        ]))
+        // Battery carriers leave a spare battery where they fell.
+        if batteryCarrierIDs.remove(npcID) != nil, let dropPosition {
+            spawnBatteryPickup(at: dropPosition)
+        }
+        shooterAimStart[npcID] = nil
+        shooterAimNodes.removeValue(forKey: npcID)?.removeFromParent()
+
+        if let node = npcNodes.removeValue(forKey: npcID) {
+            node.run(.sequence([
+                .group([
+                    .scale(to: 1.6, duration: 0.15),
+                    .fadeOut(withDuration: 0.15),
+                ]),
+                .removeFromParent(),
+            ]))
+        }
 
         // Last one? Let the death animation play, then report the win.
-        if world?.bodies.contains(where: { $0.kind == .npc }) == false {
+        if world?.bodies.contains(where: { $0.kind.isHostile }) == false {
             gameStarted = false
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
                 self?.onAllNPCsEliminated?()
