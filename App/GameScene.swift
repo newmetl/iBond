@@ -12,6 +12,7 @@ final class GameScene: SKScene {
     private var world: World?
     private var playerNode: SKShapeNode?
     private var npcNodes: [BodyID: SKShapeNode] = [:]
+    private var targetCrossNode: SKShapeNode?
 
     private var lastUpdateTime: TimeInterval?
     private var accumulator: Double = 0
@@ -20,6 +21,10 @@ final class GameScene: SKScene {
     private let playerRadius: Double = 16
     private let npcRadius: Double = 14
     private let npcCount = 8
+
+    /// Movement targets sit this far above the touch point so the player
+    /// circle stays visible above the fingertip instead of hiding under it.
+    private let touchTargetOffset: CGFloat = 60
 
     private let touchController = TouchController()
     private var laserAimPoint: CGPoint?   // set while the laser finger is down
@@ -79,6 +84,7 @@ final class GameScene: SKScene {
         world = nil
         playerNode = nil
         npcNodes = [:]
+        targetCrossNode = nil
         laserNode = nil
         sparkNode = nil
         laserAimPoint = nil
@@ -133,6 +139,20 @@ final class GameScene: SKScene {
         spark.isHidden = true
         addChild(spark)
         sparkNode = spark
+
+        // Destination marker: a small cross shown while the player is en route.
+        let crossPath = CGMutablePath()
+        crossPath.move(to: CGPoint(x: -6, y: 0))
+        crossPath.addLine(to: CGPoint(x: 6, y: 0))
+        crossPath.move(to: CGPoint(x: 0, y: -6))
+        crossPath.addLine(to: CGPoint(x: 0, y: 6))
+        let cross = SKShapeNode(path: crossPath)
+        cross.strokeColor = SKColor(white: 1, alpha: 0.7)
+        cross.lineWidth = 1.5
+        cross.isHidden = true
+        cross.zPosition = 0.5 // above the beam, below the circles
+        addChild(cross)
+        targetCrossNode = cross
 
         let label = SKLabelNode(fontNamed: "Menlo-Bold")
         label.fontSize = 15
@@ -201,6 +221,14 @@ final class GameScene: SKScene {
                 npcNodes[body.id]?.position = CGPoint(x: body.position.x, y: body.position.y)
             }
         }
+
+        // The engine clears moveTarget on arrival, so the cross hides itself.
+        if let target = world.moveTarget {
+            targetCrossNode?.position = CGPoint(x: target.x, y: target.y)
+            targetCrossNode?.isHidden = false
+        } else {
+            targetCrossNode?.isHidden = true
+        }
     }
 
     // MARK: - Input
@@ -210,7 +238,7 @@ final class GameScene: SKScene {
             let location = touch.location(in: self)
             switch touchController.began(touch) {
             case .movement:
-                world?.moveTarget = Vector2(location.x, location.y)
+                world?.moveTarget = movementTarget(for: location)
             case .laser:
                 laserAimPoint = location
             case nil:
@@ -225,7 +253,7 @@ final class GameScene: SKScene {
             switch touchController.role(of: touch) {
             case .movement:
                 // Hold-to-follow: keep re-targeting the finger.
-                world?.moveTarget = Vector2(location.x, location.y)
+                world?.moveTarget = movementTarget(for: location)
             case .laser:
                 laserAimPoint = location
             case nil:
@@ -240,6 +268,12 @@ final class GameScene: SKScene {
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
         endTouches(touches)
+    }
+
+    /// Offsets the touch upward so the player rides above the fingertip. The
+    /// engine clamps targets into the playable rect, so top-edge taps are safe.
+    private func movementTarget(for location: CGPoint) -> Vector2 {
+        Vector2(location.x, location.y + touchTargetOffset)
     }
 
     private func endTouches(_ touches: Set<UITouch>) {
