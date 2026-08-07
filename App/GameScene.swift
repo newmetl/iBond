@@ -224,7 +224,7 @@ final class GameScene: SKScene {
                     let dx = position.x - last.x
                     let dy = position.y - last.y
                     if dx * dx + dy * dy > 0.01 {
-                        playerNode?.zRotation = atan2(dy, dx)
+                        rotatePlayer(toward: atan2(dy, dx))
                     }
                 }
                 lastPlayerPosition = position
@@ -282,6 +282,19 @@ final class GameScene: SKScene {
         endTouches(touches)
     }
 
+    /// Turns the player toward `angle` along the shortest arc with exponential
+    /// smoothing — quick (about 90% there in 150ms) but never an instant jump.
+    /// Called every frame while moving or firing, so a fixed rate tracks a
+    /// continuously changing target naturally.
+    private func rotatePlayer(toward angle: CGFloat) {
+        guard let playerNode else { return }
+        var delta = angle - playerNode.zRotation
+        while delta > .pi { delta -= 2 * .pi }
+        while delta < -.pi { delta += 2 * .pi }
+        let smoothingRate: CGFloat = 15 // per second
+        playerNode.zRotation += delta * min(1, smoothingRate * CGFloat(frameDt))
+    }
+
     /// Offsets the touch upward so the player rides above the fingertip. The
     /// engine clamps targets into the playable rect, so top-edge taps are safe.
     private func movementTarget(for location: CGPoint) -> Vector2 {
@@ -311,7 +324,7 @@ final class GameScene: SKScene {
 
         // Rotate the aim line to the firing direction (persists after release).
         let direction = hit.point - player.position
-        playerNode?.zRotation = CGFloat(atan2(direction.y, direction.x))
+        rotatePlayer(toward: CGFloat(atan2(direction.y, direction.x)))
 
         // Beam from the player's center to the hit point / bounds exit.
         let path = CGMutablePath()
