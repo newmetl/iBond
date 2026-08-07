@@ -354,7 +354,7 @@ final class GameScene: SKScene {
     }
 
     /// Beam/spark visibility: showing is instant (cancels any running fade);
-    /// stopping fades both out over 300ms instead of vanishing abruptly.
+    /// stopping fades both out over 500ms instead of vanishing abruptly.
     private func showBeamNodes() {
         beamVisible = true
         for node in [laserNode, sparkNode] {
@@ -368,7 +368,7 @@ final class GameScene: SKScene {
         guard beamVisible else { return }
         beamVisible = false
         for node in [laserNode, sparkNode] {
-            node?.run(.sequence([.fadeOut(withDuration: 0.3), .hide()]),
+            node?.run(.sequence([.fadeOut(withDuration: 0.5), .hide()]),
                       withKey: "beamFade")
         }
     }
