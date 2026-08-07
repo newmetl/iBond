@@ -32,6 +32,7 @@ final class GameScene: SKScene {
     private var laserCharge: Double = 2
     private var batteryLabel: SKLabelNode?
     private var frameDt: Double = 0   // last frame's clamped wall-clock dt
+    private var beamVisible = false   // tracks show/fade state of beam + spark
 
     override func didMove(to view: SKView) {
         backgroundColor = SKColor(red: 0.05, green: 0.05, blue: 0.09, alpha: 1)
@@ -83,6 +84,7 @@ final class GameScene: SKScene {
         laserAimPoint = nil
         batteryLabel = nil
         laserCharge = laserCapacity
+        beamVisible = false
         gameStarted = true
         ensureWorld() // builds now if the scene is laid out; else on next update
     }
@@ -127,16 +129,8 @@ final class GameScene: SKScene {
         addChild(laser)
         laserNode = laser
 
-        let spark = SKShapeNode(circleOfRadius: 5)
-        spark.fillColor = SKColor(red: 1, green: 0.9, blue: 0.4, alpha: 1)
-        spark.strokeColor = .clear
-        spark.glowWidth = 8
+        let spark = makeSparkNode()
         spark.isHidden = true
-        spark.zPosition = 2 // above every circle
-        spark.run(.repeatForever(.sequence([
-            .scale(to: 1.4, duration: 0.08),
-            .scale(to: 0.8, duration: 0.08),
-        ])))
         addChild(spark)
         sparkNode = spark
 
@@ -152,6 +146,21 @@ final class GameScene: SKScene {
     private func updateBatteryLabel() {
         let percent = Int((laserCharge / laserCapacity * 100).rounded())
         batteryLabel?.text = String(format: "%d%% · %.2fs", percent, laserCharge)
+    }
+
+    /// The pulsing yellow impact spark; used persistently at the beam's
+    /// endpoint and as a transient burst where an NPC gets hit.
+    private func makeSparkNode() -> SKShapeNode {
+        let spark = SKShapeNode(circleOfRadius: 5)
+        spark.fillColor = SKColor(red: 1, green: 0.9, blue: 0.4, alpha: 1)
+        spark.strokeColor = .clear
+        spark.glowWidth = 8
+        spark.zPosition = 2 // above every circle
+        spark.run(.repeatForever(.sequence([
+            .scale(to: 1.4, duration: 0.08),
+            .scale(to: 0.8, duration: 0.08),
+        ])))
+        return spark
     }
 
     private func makeCircleNode(radius: Double, fill: SKColor) -> SKShapeNode {
@@ -250,8 +259,7 @@ final class GameScene: SKScene {
         guard laserCharge > 0, let aim = laserAimPoint,
               let hit = world.castLaser(through: Vector2(aim.x, aim.y)),
               let player = world.playerID.flatMap({ world.body(withID: $0) }) else {
-            laserNode?.isHidden = true
-            sparkNode?.isHidden = true
+            fadeOutBeamIfNeeded()
             return
         }
 
@@ -264,15 +272,13 @@ final class GameScene: SKScene {
         path.move(to: CGPoint(x: player.position.x, y: player.position.y))
         path.addLine(to: CGPoint(x: hit.point.x, y: hit.point.y))
         laserNode?.path = path
-        laserNode?.isHidden = false
-
         sparkNode?.position = CGPoint(x: hit.point.x, y: hit.point.y)
-        sparkNode?.isHidden = false
+        showBeamNodes()
 
         // Only NPCs die; when obstacles join the raycast (M2) they must block,
         // not vanish.
         if let victimID = hit.bodyID, world.body(withID: victimID)?.kind == .npc {
-            kill(npcID: victimID)
+            kill(npcID: victimID, at: hit.point)
         }
 
         // The beam rendered this frame, so it drains the battery. This runs
@@ -281,18 +287,45 @@ final class GameScene: SKScene {
         if laserCharge <= 0, gameStarted,
            world.bodies.contains(where: { $0.kind == .npc }) {
             gameStarted = false
-            laserNode?.isHidden = true
-            sparkNode?.isHidden = true
+            fadeOutBeamIfNeeded()
             DispatchQueue.main.async { [weak self] in
                 self?.onBatteryEmpty?()
             }
         }
     }
 
+    /// Beam/spark visibility with a soft landing: showing cancels any running
+    /// fade; stopping fades both out over 0.2s instead of vanishing abruptly.
+    private func showBeamNodes() {
+        beamVisible = true
+        for node in [laserNode, sparkNode] {
+            node?.removeAction(forKey: "beamFade")
+            node?.alpha = 1
+            node?.isHidden = false
+        }
+    }
+
+    private func fadeOutBeamIfNeeded() {
+        guard beamVisible else { return }
+        beamVisible = false
+        for node in [laserNode, sparkNode] {
+            node?.run(.sequence([.fadeOut(withDuration: 0.2), .hide()]),
+                      withKey: "beamFade")
+        }
+    }
+
     /// Instant kill: remove from the simulation immediately, let the node play
     /// a short grow-and-fade before leaving the scene.
-    private func kill(npcID: BodyID) {
+    private func kill(npcID: BodyID, at hitPoint: Vector2) {
         world?.remove(bodyID: npcID)
+
+        // Same impact spark as at the world's edge, as a short burst — the NPC
+        // is gone instantly, so the spark lives just long enough to register.
+        let burst = makeSparkNode()
+        burst.position = CGPoint(x: hitPoint.x, y: hitPoint.y)
+        addChild(burst)
+        burst.run(.sequence([.fadeOut(withDuration: 0.25), .removeFromParent()]))
+
         guard let node = npcNodes.removeValue(forKey: npcID) else { return }
         node.run(.sequence([
             .group([
