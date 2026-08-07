@@ -133,6 +133,7 @@ final class GameScene: SKScene {
         processShooters(currentTime)
         checkRunnerTouches()
         checkBatteryPickups()
+        checkBatteryEmpty()
         updateBatteryLabel()
     }
 
@@ -601,14 +602,21 @@ final class GameScene: SKScene {
 
         // The beam rendered this frame, so it drains the battery. This runs
         // after the kill so a last-kill-on-last-drop tie counts as a win.
+        // The empty-battery game-over lives in checkBatteryEmpty(), which
+        // runs every frame — not just while firing.
         laserCharge = max(0, laserCharge - frameDt)
-        if laserCharge <= 0, gameStarted,
-           world.bodies.contains(where: { $0.kind.isHostile }) {
-            gameStarted = false
-            fadeOutBeamIfNeeded()
-            DispatchQueue.main.async { [weak self] in
-                self?.onBatteryEmpty?()
-            }
+    }
+
+    /// Game over when the battery is effectively dead and hostiles remain.
+    /// Runs every frame: releasing the trigger with a sub-display sliver of
+    /// charge (HUD shows "0.00s" below 0.005) must still end the game.
+    private func checkBatteryEmpty() {
+        guard gameStarted, laserCharge < 0.005, let world,
+              world.bodies.contains(where: { $0.kind.isHostile }) else { return }
+        gameStarted = false
+        fadeOutBeamIfNeeded()
+        DispatchQueue.main.async { [weak self] in
+            self?.onBatteryEmpty?()
         }
     }
 
