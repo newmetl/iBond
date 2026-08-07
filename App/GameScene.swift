@@ -5,8 +5,6 @@ final class GameScene: SKScene {
     /// Fired (on the main thread) shortly after the last NPC dies, once its
     /// death animation has played out.
     var onAllNPCsEliminated: (() -> Void)?
-    /// Fired when the laser battery runs out while NPCs are still alive.
-    var onBatteryEmpty: (() -> Void)?
     /// Fired when the player dies — shot by a shooter, touched by a runner,
     /// or hit by their own reflected laser.
     var onPlayerKilled: (() -> Void)?
@@ -79,6 +77,8 @@ final class GameScene: SKScene {
     private let laserCapacity: Double = 2
     private var laserCharge: Double = 2
     private var batteryLabel: SKLabelNode?
+    private var batteryHUDNode: SKNode?
+    private var batteryFillBar: SKSpriteNode?
     private var frameDt: Double = 0   // last frame's clamped wall-clock dt
     private var beamVisible = false   // tracks show/fade state of beam + spark
 
@@ -90,7 +90,7 @@ final class GameScene: SKScene {
     override func didChangeSize(_ oldSize: CGSize) {
         // The map is larger than the screen and fixed at game start — resizes
         // only change the viewport. Keep the HUD pinned inside the camera frame.
-        batteryLabel?.position = CGPoint(x: 0, y: size.height / 2 - 80)
+        batteryHUDNode?.position = CGPoint(x: 0, y: size.height / 2 - 80)
         joystickBase?.position = joystickCenter
         fireButton?.position = fireButtonCenter
     }
@@ -133,8 +133,7 @@ final class GameScene: SKScene {
         processShooters(currentTime)
         checkRunnerTouches()
         checkBatteryPickups()
-        checkBatteryEmpty()
-        updateBatteryLabel()
+        updateBatteryHUD()
     }
 
     /// Runners wait in ambush until they first scroll into view, then chase
@@ -168,6 +167,8 @@ final class GameScene: SKScene {
         sparkNode = nil
         fireButtonHeld = false
         batteryLabel = nil
+        batteryHUDNode = nil
+        batteryFillBar = nil
         laserCharge = laserCapacity
         beamVisible = false
         shooterAimStart = [:]
@@ -364,18 +365,52 @@ final class GameScene: SKScene {
         camera.addChild(fire)
         fireButton = fire
 
+        // Battery HUD (rides the camera): icon with a color-coded charge bar
+        // plus the remaining firing time.
+        let hud = SKNode()
+        hud.position = CGPoint(x: 0, y: size.height / 2 - 80)
+        hud.zPosition = 3
+        camera.addChild(hud)
+        batteryHUDNode = hud
+
+        let iconBody = SKShapeNode(rectOf: CGSize(width: 26, height: 13), cornerRadius: 2.5)
+        iconBody.strokeColor = SKColor(white: 1, alpha: 0.85)
+        iconBody.lineWidth = 1.5
+        iconBody.fillColor = .clear
+        iconBody.position = CGPoint(x: -28, y: 0)
+        hud.addChild(iconBody)
+
+        let iconTip = SKShapeNode(rectOf: CGSize(width: 3, height: 6), cornerRadius: 1)
+        iconTip.strokeColor = .clear
+        iconTip.fillColor = SKColor(white: 1, alpha: 0.85)
+        iconTip.position = CGPoint(x: -28 + 13 + 2.5, y: 0)
+        hud.addChild(iconTip)
+
+        let fill = SKSpriteNode(color: .green, size: CGSize(width: 22, height: 9))
+        fill.anchorPoint = CGPoint(x: 0, y: 0.5)
+        fill.position = CGPoint(x: -28 - 11, y: 0)
+        hud.addChild(fill)
+        batteryFillBar = fill
+
         let label = SKLabelNode(fontNamed: "Menlo-Bold")
         label.fontSize = 15
         label.fontColor = SKColor(white: 1, alpha: 0.85)
-        label.position = CGPoint(x: 0, y: size.height / 2 - 80)
-        label.zPosition = 3
-        camera.addChild(label) // HUD rides the camera, not the map
+        label.horizontalAlignmentMode = .left
+        label.verticalAlignmentMode = .center
+        label.position = CGPoint(x: -2, y: 0)
+        hud.addChild(label)
         batteryLabel = label
     }
 
-    private func updateBatteryLabel() {
-        let percent = Int((laserCharge / laserCapacity * 100).rounded())
-        batteryLabel?.text = String(format: "%d%% · %.2fs", percent, laserCharge)
+    private func updateBatteryHUD() {
+        batteryLabel?.text = String(format: "%.2fs", laserCharge)
+        let fraction = CGFloat(laserCharge / laserCapacity)
+        batteryFillBar?.size = CGSize(width: 22 * max(0, fraction), height: 9)
+        batteryFillBar?.color = fraction > 0.55
+            ? SKColor(red: 0.3, green: 0.85, blue: 0.35, alpha: 1)   // green: full-ish
+            : fraction > 0.25
+                ? SKColor(red: 1, green: 0.8, blue: 0.2, alpha: 1)   // yellow: mid
+                : SKColor(red: 1, green: 0.3, blue: 0.3, alpha: 1)   // red: running low
     }
 
     /// The pulsing yellow impact spark; used persistently at the beam's
@@ -602,22 +637,9 @@ final class GameScene: SKScene {
 
         // The beam rendered this frame, so it drains the battery. This runs
         // after the kill so a last-kill-on-last-drop tie counts as a win.
-        // The empty-battery game-over lives in checkBatteryEmpty(), which
-        // runs every frame — not just while firing.
+        // An empty battery is NOT game over: the laser just can't fire until
+        // the player collects a dropped spare battery.
         laserCharge = max(0, laserCharge - frameDt)
-    }
-
-    /// Game over when the battery is effectively dead and hostiles remain.
-    /// Runs every frame: releasing the trigger with a sub-display sliver of
-    /// charge (HUD shows "0.00s" below 0.005) must still end the game.
-    private func checkBatteryEmpty() {
-        guard gameStarted, laserCharge < 0.005, let world,
-              world.bodies.contains(where: { $0.kind.isHostile }) else { return }
-        gameStarted = false
-        fadeOutBeamIfNeeded()
-        DispatchQueue.main.async { [weak self] in
-            self?.onBatteryEmpty?()
-        }
     }
 
     // MARK: - Camera

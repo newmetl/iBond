@@ -15,8 +15,8 @@ public final class World {
     public var playerSpeed: Double = 320
     /// Exponential-ish velocity damping applied to hostiles so pushes fade out.
     public var npcDamping: Double = 4
-    /// Runner chase speed in points per second (~60% of the default playerSpeed).
-    public var runnerSpeed: Double = 192
+    /// Runner chase speed in points per second (~53% of the default playerSpeed).
+    public var runnerSpeed: Double = 170
 
     private var nextID: BodyID = 0
 
