@@ -13,6 +13,7 @@ final class GameScene: SKScene {
     private var playerNode: SKShapeNode?
     private var npcNodes: [BodyID: SKShapeNode] = [:]
     private var targetCrossNode: SKShapeNode?
+    private var lastPlayerPosition: CGPoint?
 
     private var lastUpdateTime: TimeInterval?
     private var accumulator: Double = 0
@@ -85,6 +86,7 @@ final class GameScene: SKScene {
         playerNode = nil
         npcNodes = [:]
         targetCrossNode = nil
+        lastPlayerPosition = nil
         laserNode = nil
         sparkNode = nil
         laserAimPoint = nil
@@ -210,13 +212,23 @@ final class GameScene: SKScene {
         for body in world.bodies {
             switch body.kind {
             case .player:
-                playerNode?.position = CGPoint(x: body.position.x, y: body.position.y)
-                // Face the direction of travel. processLaser() runs after this
-                // each frame and overrides with the firing direction while the
+                let position = CGPoint(x: body.position.x, y: body.position.y)
+                // Face the direction of travel, derived from the actual
+                // per-frame position delta — velocity is zero at frame end
+                // whenever the engine's arrival branch snaps to a near target
+                // (slow finger-follow re-targets within one step's travel), so
+                // velocity can't be trusted for facing. processLaser() runs
+                // after this and overrides with the firing direction while the
                 // laser is held; when idle, the last direction persists.
-                if body.velocity.length > 0 {
-                    playerNode?.zRotation = CGFloat(atan2(body.velocity.y, body.velocity.x))
+                if let last = lastPlayerPosition {
+                    let dx = position.x - last.x
+                    let dy = position.y - last.y
+                    if dx * dx + dy * dy > 0.01 {
+                        playerNode?.zRotation = atan2(dy, dx)
+                    }
                 }
+                lastPlayerPosition = position
+                playerNode?.position = position
             case .npc:
                 npcNodes[body.id]?.position = CGPoint(x: body.position.x, y: body.position.y)
             }
