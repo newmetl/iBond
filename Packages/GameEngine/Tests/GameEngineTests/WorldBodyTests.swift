@@ -62,6 +62,29 @@ final class WorldBodyTests: XCTestCase {
         XCTAssertNil(world.randomFreePosition(radius: 14, using: &rng))
     }
 
+    func testRegionConstrainedSamplingStaysInRegion() {
+        let world = World(size: Vector2(400, 400))
+        var rng = SystemRandomNumberGenerator()
+        let region = Rect(min: Vector2(100, 150), max: Vector2(300, 250))
+        for _ in 0..<20 {
+            guard let p = world.randomFreePosition(radius: 20, in: region, using: &rng) else {
+                return XCTFail("expected a free position in an empty region")
+            }
+            XCTAssertTrue(p.x >= 100 && p.x <= 300 && p.y >= 150 && p.y <= 250)
+            // Still respects world bounds insetting by radius.
+            XCTAssertTrue(p.x >= 20 && p.x <= 380 && p.y >= 20 && p.y <= 380)
+        }
+    }
+
+    func testRegionSmallerThanRadiusStillSamplesItsCenterline() {
+        // A degenerate (zero-area after inset) region must not crash; it may
+        // return nil or a point clamped to the region.
+        let world = World(size: Vector2(400, 400))
+        var rng = SystemRandomNumberGenerator()
+        let region = Rect(min: Vector2(200, 200), max: Vector2(200, 200))
+        _ = world.randomFreePosition(radius: 20, in: region, using: &rng) // no crash
+    }
+
     func testRemovingSameBodyTwiceIsHarmless() {
         let world = World(size: Vector2(400, 400))
         let id = world.addNPC(at: Vector2(120, 80))

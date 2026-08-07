@@ -2,6 +2,7 @@
 /// Coordinates are screen points; SpriteKit's bottom-left origin is used as-is.
 public final class World {
     public private(set) var bodies: [CircleBody] = []
+    public private(set) var mirrors: [Mirror] = []
     public var size: Vector2
     public private(set) var playerID: BodyID?
 
@@ -37,6 +38,24 @@ public final class World {
         return id
     }
 
+    /// Adds an immovable rock obstacle. Blocks circles and the laser.
+    @discardableResult
+    public func addRock(at position: Vector2, radius: Double) -> BodyID {
+        let id = makeID()
+        bodies.append(CircleBody(id: id, kind: .rock, position: position,
+                                 velocity: .zero, radius: radius, mass: 1))
+        return id
+    }
+
+    public var rockIDs: [BodyID] {
+        bodies.filter { $0.kind == .rock }.map(\.id)
+    }
+
+    /// Adds a reflective mirror segment. Reflects the laser; blocks circles.
+    public func addMirror(from start: Vector2, to end: Vector2) {
+        mirrors.append(Mirror(start: start, end: end))
+    }
+
     public func body(withID id: BodyID) -> CircleBody? {
         bodies.first { $0.id == id }
     }
@@ -51,13 +70,30 @@ public final class World {
     public func randomFreePosition<R: RandomNumberGenerator>(
         radius: Double, using rng: inout R, attempts: Int = 100
     ) -> Vector2? {
+        randomFreePosition(radius: radius,
+                           in: Rect(min: .zero, max: size),
+                           using: &rng, attempts: attempts)
+    }
+
+    /// Like `randomFreePosition(radius:using:attempts:)`, but samples only
+    /// inside `region` (intersected with the radius-inset world bounds).
+    public func randomFreePosition<R: RandomNumberGenerator>(
+        radius: Double, in region: Rect, using rng: inout R, attempts: Int = 100
+    ) -> Vector2? {
         let margin = 8.0
-        guard size.x > 2 * radius, size.y > 2 * radius else { return nil }
+        let minX = Swift.max(region.min.x, radius)
+        let maxX = Swift.min(region.max.x, size.x - radius)
+        let minY = Swift.max(region.min.y, radius)
+        let maxY = Swift.min(region.max.y, size.y - radius)
+        guard minX <= maxX, minY <= maxY else { return nil }
         for _ in 0..<attempts {
-            let p = Vector2(Double.random(in: radius...(size.x - radius), using: &rng),
-                            Double.random(in: radius...(size.y - radius), using: &rng))
-            let isFree = bodies.allSatisfy { $0.position.distance(to: p) >= $0.radius + radius + margin }
-            if isFree { return p }
+            let p = Vector2(Double.random(in: minX...maxX, using: &rng),
+                            Double.random(in: minY...maxY, using: &rng))
+            let clearOfBodies = bodies.allSatisfy { $0.position.distance(to: p) >= $0.radius + radius + margin }
+            let clearOfMirrors = mirrors.allSatisfy {
+                Self.closestPoint(onSegment: $0.start, $0.end, to: p).distance(to: p) >= radius + margin
+            }
+            if clearOfBodies && clearOfMirrors { return p }
         }
         return nil
     }
@@ -68,11 +104,13 @@ public final class World {
         seekPlayer(dt: dt)
         integrate(dt: dt)
         resolveCollisions()
+        resolveMirrorCollisions()
         applyDamping(dt: dt)
         clampToBounds()
         // Clamping can push a wall-pinned body back into a neighbor it was just
         // separated from; one more pass keeps pairs resolved within the frame.
         resolveCollisions()
+        resolveMirrorCollisions()
         // ...and that pass must never leave a body outside the bounds for the
         // rendered frame — residual overlap heals next frame, protrusion won't.
         clampToBounds()
@@ -105,7 +143,7 @@ public final class World {
     }
 
     private func integrate(dt: Double) {
-        for i in bodies.indices {
+        for i in bodies.indices where !bodies[i].isStatic {
             bodies[i].position += bodies[i].velocity * dt
         }
     }
@@ -131,9 +169,12 @@ public final class World {
 
                 // Concentric circles have no meaningful normal; pick +x.
                 let normal = dist > 0 ? delta / dist : Vector2(1, 0)
-                let invA = 1 / a.mass
-                let invB = 1 / b.mass
+                // Static bodies have zero inverse mass: they absorb nothing,
+                // the movable partner takes the full separation and impulse.
+                let invA = a.isStatic ? 0 : 1 / a.mass
+                let invB = b.isStatic ? 0 : 1 / b.mass
                 let invSum = invA + invB
+                guard invSum > 0 else { continue } // rock-rock: nothing to do
 
                 let penetration = minDist - dist
                 a.position -= normal * (penetration * invA / invSum)
@@ -152,6 +193,38 @@ public final class World {
         }
     }
 
+    /// Mirrors are static walls: any movable circle overlapping one is pushed
+    /// out along the shortest exit, and its approach velocity is cancelled.
+    private func resolveMirrorCollisions() {
+        guard !mirrors.isEmpty else { return }
+        for i in bodies.indices where !bodies[i].isStatic {
+            for mirror in mirrors {
+                let closest = Self.closestPoint(onSegment: mirror.start, mirror.end,
+                                                to: bodies[i].position)
+                let delta = bodies[i].position - closest
+                let dist = delta.length
+                guard dist < bodies[i].radius else { continue }
+                // Center exactly on the segment: push along the segment normal.
+                let seg = mirror.end - mirror.start
+                let normal = dist > 0 ? delta / dist : Vector2(-seg.y, seg.x).normalized
+                bodies[i].position += normal * (bodies[i].radius - dist)
+                let approach = bodies[i].velocity.dot(normal)
+                if approach < 0 {
+                    bodies[i].velocity -= normal * approach
+                }
+            }
+        }
+    }
+
+    internal static func closestPoint(onSegment start: Vector2, _ end: Vector2,
+                                      to point: Vector2) -> Vector2 {
+        let seg = end - start
+        let lengthSquared = seg.dot(seg)
+        guard lengthSquared > 0 else { return start }
+        let s = Swift.min(1, Swift.max(0, (point - start).dot(seg) / lengthSquared))
+        return start + seg * s
+    }
+
     private func applyDamping(dt: Double) {
         let factor = max(0, 1 - npcDamping * dt)
         for i in bodies.indices where bodies[i].kind == .npc {
@@ -160,7 +233,7 @@ public final class World {
     }
 
     private func clampToBounds() {
-        for i in bodies.indices {
+        for i in bodies.indices where !bodies[i].isStatic {
             let r = bodies[i].radius
             bodies[i].position.x = min(max(bodies[i].position.x, r), size.x - r)
             bodies[i].position.y = min(max(bodies[i].position.y, r), size.y - r)

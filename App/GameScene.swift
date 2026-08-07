@@ -27,6 +27,10 @@ final class GameScene: SKScene {
     /// circle stays visible above the fingertip instead of hiding under it.
     private let touchTargetOffset: CGFloat = 60
 
+    private let rockCount = 3
+    private let mirrorCount = 2
+    private let mirrorHalfLength: Double = 70
+
     private let touchController = TouchController()
     private var laserAimPoint: CGPoint?   // set while the laser finger is down
     private var laserNode: SKShapeNode?
@@ -105,6 +109,24 @@ final class GameScene: SKScene {
 
         world.addPlayer(at: Vector2(size.width / 2, size.height / 2), radius: playerRadius)
         var rng = SystemRandomNumberGenerator()
+
+        // Mirrors first, then rocks, then NPCs — each placement pass avoids
+        // everything placed before it (spawn sampling checks bodies + mirrors).
+        let middle = Rect(min: Vector2(size.width * 0.15, size.height * 0.28),
+                          max: Vector2(size.width * 0.85, size.height * 0.72))
+        for _ in 0..<mirrorCount {
+            guard let center = world.randomFreePosition(radius: mirrorHalfLength + 10,
+                                                        in: middle, using: &rng) else { break }
+            let angle = Double.random(in: 0..<Double.pi, using: &rng)
+            let along = Vector2(cos(angle), sin(angle)) * mirrorHalfLength
+            world.addMirror(from: center - along, to: center + along)
+        }
+        for _ in 0..<rockCount {
+            let radius = Double.random(in: 38...52, using: &rng)
+            guard let position = world.randomFreePosition(radius: radius, in: middle,
+                                                          using: &rng) else { break }
+            world.addRock(at: position, radius: radius)
+        }
         for _ in 0..<npcCount {
             guard let position = world.randomFreePosition(radius: npcRadius, using: &rng) else { break }
             world.addNPC(at: position, radius: npcRadius)
@@ -127,6 +149,26 @@ final class GameScene: SKScene {
             node.zPosition = 0
             addChild(node)
             npcNodes[body.id] = node
+        }
+
+        for body in world.bodies where body.kind == .rock {
+            let node = makeRockNode(radius: body.radius)
+            node.position = CGPoint(x: body.position.x, y: body.position.y)
+            node.zPosition = 0
+            addChild(node)
+        }
+
+        for mirror in world.mirrors {
+            let path = CGMutablePath()
+            path.move(to: CGPoint(x: mirror.start.x, y: mirror.start.y))
+            path.addLine(to: CGPoint(x: mirror.end.x, y: mirror.end.y))
+            let node = SKShapeNode(path: path)
+            node.strokeColor = SKColor(red: 0.75, green: 0.93, blue: 1, alpha: 1)
+            node.lineWidth = 3.5
+            node.glowWidth = 1.5
+            node.lineCap = .round
+            node.zPosition = 0
+            addChild(node)
         }
 
         let laser = SKShapeNode()
@@ -185,6 +227,26 @@ final class GameScene: SKScene {
         return spark
     }
 
+    /// A big immovable rock: an irregular polygon roughly tracing the engine's
+    /// circular collider (vertex radii jittered slightly inside/outside it).
+    private func makeRockNode(radius: Double) -> SKShapeNode {
+        let vertexCount = 9
+        let path = CGMutablePath()
+        for i in 0..<vertexCount {
+            let angle = Double(i) / Double(vertexCount) * 2 * .pi
+            let r = radius * Double.random(in: 0.86...1.04)
+            let point = CGPoint(x: cos(angle) * r, y: sin(angle) * r)
+            i == 0 ? path.move(to: point) : path.addLine(to: point)
+        }
+        path.closeSubpath()
+        let node = SKShapeNode(path: path)
+        node.fillColor = SKColor(red: 0.33, green: 0.34, blue: 0.4, alpha: 1)
+        node.strokeColor = SKColor(red: 0.5, green: 0.52, blue: 0.6, alpha: 1)
+        node.lineWidth = 2
+        node.lineJoin = .round
+        return node
+    }
+
     private func makeCircleNode(radius: Double, fill: SKColor) -> SKShapeNode {
         let node = SKShapeNode(circleOfRadius: CGFloat(radius))
         node.fillColor = fill
@@ -231,6 +293,8 @@ final class GameScene: SKScene {
                 playerNode?.position = position
             case .npc:
                 npcNodes[body.id]?.position = CGPoint(x: body.position.x, y: body.position.y)
+            case .rock:
+                break // static; the node was positioned once at build time
             }
         }
 
@@ -316,28 +380,30 @@ final class GameScene: SKScene {
     private func processLaser() {
         guard let world else { return }
         guard laserCharge > 0, let aim = laserAimPoint,
-              let hit = world.castLaser(through: Vector2(aim.x, aim.y)),
-              let player = world.playerID.flatMap({ world.body(withID: $0) }) else {
+              let beam = world.castLaserPath(through: Vector2(aim.x, aim.y)),
+              let endPoint = beam.points.last, beam.points.count >= 2 else {
             fadeOutBeamIfNeeded()
             return
         }
 
-        // Rotate the aim line to the firing direction (persists after release).
-        let direction = hit.point - player.position
+        // Rotate the aim line to the outgoing firing direction — the first
+        // beam segment, not the (possibly mirror-bent) final one.
+        let direction = beam.points[1] - beam.points[0]
         rotatePlayer(toward: CGFloat(atan2(direction.y, direction.x)))
 
-        // Beam from the player's center to the hit point / bounds exit.
+        // Polyline through every bounce point to the final hit / bounds exit.
         let path = CGMutablePath()
-        path.move(to: CGPoint(x: player.position.x, y: player.position.y))
-        path.addLine(to: CGPoint(x: hit.point.x, y: hit.point.y))
+        path.move(to: CGPoint(x: beam.points[0].x, y: beam.points[0].y))
+        for point in beam.points.dropFirst() {
+            path.addLine(to: CGPoint(x: point.x, y: point.y))
+        }
         laserNode?.path = path
-        sparkNode?.position = CGPoint(x: hit.point.x, y: hit.point.y)
+        sparkNode?.position = CGPoint(x: endPoint.x, y: endPoint.y)
         showBeamNodes()
 
-        // Only NPCs die; when obstacles join the raycast (M2) they must block,
-        // not vanish.
-        if let victimID = hit.bodyID, world.body(withID: victimID)?.kind == .npc {
-            kill(npcID: victimID, at: hit.point)
+        // Only NPCs die — rocks just absorb the beam.
+        if let victimID = beam.bodyID, world.body(withID: victimID)?.kind == .npc {
+            kill(npcID: victimID, at: endPoint)
         }
 
         // The beam rendered this frame, so it drains the battery. This runs

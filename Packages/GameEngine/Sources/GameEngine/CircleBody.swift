@@ -4,7 +4,12 @@ public struct CircleBody: Identifiable, Equatable {
     public enum Kind: Equatable {
         case player
         case npc
+        /// Immovable obstacle: blocks circles and the laser, never moves.
+        case rock
     }
+
+    /// Static bodies take no integration, damping, or collision response.
+    public var isStatic: Bool { kind == .rock }
 
     public let id: BodyID
     public let kind: Kind
