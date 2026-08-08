@@ -36,11 +36,15 @@ final class GameScene: SKScene {
     private var level = 1
     private var config = LevelConfig.forLevel(1)
     /// Camera follow box: the camera scrolls once the player crosses these
-    /// margins. Generous side/top margins reveal enemies early; the bottom
-    /// edge sits at 50% of the screen so downward movement scrolls from the
-    /// center line (the corner controls live below it).
-    private let cameraMarginX: CGFloat = 175
-    private let cameraMarginTop: CGFloat = 280
+    /// margins, expressed as fractions of the half-screen so the box scales
+    /// with orientation (absolute portrait margins made the box degenerate in
+    /// landscape). On a 402×874 portrait screen these match the original
+    /// 175pt side / 280pt top margins; in landscape the box is much smaller.
+    /// Generous side/top margins reveal enemies early; the bottom edge sits
+    /// at 50% of the screen so downward movement scrolls from the center
+    /// line (the corner controls live below it).
+    private let cameraMarginXFraction: CGFloat = 0.87
+    private let cameraMarginTopFraction: CGFloat = 0.64
     /// Decorative litter density is constant per screen of map area
     /// (about 200 pieces on the original 3×3 map).
     private let litterPerScreen = 22
@@ -733,12 +737,14 @@ final class GameScene: SKScene {
         var cam = cameraNode.position
         let halfW = size.width / 2
         let halfH = size.height / 2
+        let marginX = halfW * cameraMarginXFraction
+        let marginTop = halfH * cameraMarginTopFraction
         let marginBottom = halfH // box bottom = screen center line
         let px = CGFloat(player.position.x)
         let py = CGFloat(player.position.y)
-        if px > cam.x + halfW - cameraMarginX { cam.x = px - (halfW - cameraMarginX) }
-        if px < cam.x - halfW + cameraMarginX { cam.x = px + (halfW - cameraMarginX) }
-        if py > cam.y + halfH - cameraMarginTop { cam.y = py - (halfH - cameraMarginTop) }
+        if px > cam.x + halfW - marginX { cam.x = px - (halfW - marginX) }
+        if px < cam.x - halfW + marginX { cam.x = px + (halfW - marginX) }
+        if py > cam.y + halfH - marginTop { cam.y = py - (halfH - marginTop) }
         if py < cam.y - halfH + marginBottom { cam.y = py + (halfH - marginBottom) }
         cam.x = min(max(cam.x, halfW), CGFloat(world.size.x) - halfW)
         cam.y = min(max(cam.y, halfH), CGFloat(world.size.y) - halfH)
