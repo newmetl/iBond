@@ -12,8 +12,9 @@ pure-Swift custom physics/raycast engine. Rebuilt from scratch in 2026 from a
   update, circle & segment collisions, laser raycast with mirror reflection,
   line-of-sight), Rect, Laser.swift (LaserHit/Mirror/LaserPath + castLaserPath).
 - `App/` — app layer. `GameScene.swift` (~900 lines: world building, camera,
-  input, all gameplay systems, HUD, effects), `Levels.swift` (LevelConfig +
-  the 10-level table; level 7 = the original single-map game), `iBondApp.swift`
+  input, all gameplay systems, HUD, effects), `Levels.swift` (LevelConfig:
+  20 levels interpolated from 10 anchor rows; anchor 7 ≈ level 14 = the
+  original single-map game), `iBondApp.swift`
   (SwiftUI shell + menu/playing/finished/gameOver overlay state machine, level
   progression persisted via @AppStorage "currentLevel"), `TouchController.swift`
   (touch role assignment by start zone), `Assets.xcassets` (AppIcon).

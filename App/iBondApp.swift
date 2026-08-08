@@ -106,15 +106,17 @@ struct GameView: View {
         }
     }
 
-    /// Two rows of level buttons; picking one jumps straight into that level.
+    /// Rows of five level buttons; picking one jumps straight into that level.
     private var devLevelGrid: some View {
         VStack(spacing: 10) {
             Text("DEV · pick level")
                 .font(.caption.bold())
                 .foregroundStyle(.white.opacity(0.5))
-            ForEach([1, 6], id: \.self) { rowStart in
+            ForEach(Array(stride(from: 1, through: LevelConfig.count, by: 5)),
+                    id: \.self) { rowStart in
                 HStack(spacing: 10) {
-                    ForEach(rowStart..<rowStart + 5, id: \.self) { pick in
+                    ForEach(rowStart..<min(rowStart + 5, LevelConfig.count + 1),
+                            id: \.self) { pick in
                         Button("\(pick)") {
                             showDevMenu = false
                             level = pick
