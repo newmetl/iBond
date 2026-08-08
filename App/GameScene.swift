@@ -57,13 +57,13 @@ final class GameScene: SKScene {
     /// and the base's offset from the screen corner.
     private let joystickRadius: CGFloat = 70
     private let steeringZoneRadius: CGFloat = 120
-    private let joystickCornerOffset = CGPoint(x: 95, y: 110)
+    private let joystickCornerOffset = CGPoint(x: 80, y: 92)
 
     /// Fire button (lower-right): tap = burst, hold = continuous. The beam
     /// fires along the player's current facing.
     private let fireButtonRadius: CGFloat = 44
     private let fireZoneRadius: CGFloat = 100
-    private let fireButtonCornerOffset = CGPoint(x: 85, y: 115)
+    private let fireButtonCornerOffset = CGPoint(x: 65, y: 88)
 
     private let rockCount = 16
     private let mirrorCount = 8
