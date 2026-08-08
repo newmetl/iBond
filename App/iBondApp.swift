@@ -26,6 +26,8 @@ struct GameView: View {
     @State private var phase: GamePhase = .menu
     /// The level currently being played (or about to be); survives relaunches.
     @AppStorage("currentLevel") private var level = 1
+    /// Developer level picker, toggled by the wrench icon on any overlay.
+    @State private var showDevMenu = false
 
     /// True on the finished overlay after beating the last level.
     private var wonTheGame: Bool {
@@ -73,6 +75,26 @@ struct GameView: View {
                     .font(.title2.bold())
                     .buttonStyle(.borderedProminent)
                     .tint(Color(red: 0.2, green: 0.65, blue: 0.9))
+
+                    if showDevMenu {
+                        devLevelGrid
+                    }
+                }
+
+                // Developer corner: wrench toggles the level picker.
+                VStack {
+                    HStack {
+                        Spacer()
+                        Button {
+                            showDevMenu.toggle()
+                        } label: {
+                            Image(systemName: "wrench.and.screwdriver.fill")
+                                .font(.title3)
+                                .foregroundStyle(.white.opacity(0.35))
+                                .padding(16)
+                        }
+                    }
+                    Spacer()
                 }
             }
         }
@@ -82,5 +104,33 @@ struct GameView: View {
             scene.onAllNPCsEliminated = { phase = .finished }
             scene.onPlayerKilled = { phase = .gameOver }
         }
+    }
+
+    /// Two rows of level buttons; picking one jumps straight into that level.
+    private var devLevelGrid: some View {
+        VStack(spacing: 10) {
+            Text("DEV · pick level")
+                .font(.caption.bold())
+                .foregroundStyle(.white.opacity(0.5))
+            ForEach([1, 6], id: \.self) { rowStart in
+                HStack(spacing: 10) {
+                    ForEach(rowStart..<rowStart + 5, id: \.self) { pick in
+                        Button("\(pick)") {
+                            showDevMenu = false
+                            level = pick
+                            scene.startGame(level: pick)
+                            phase = .playing
+                        }
+                        .font(.headline)
+                        .frame(width: 44, height: 44)
+                        .background(pick == level ? Color(red: 0.2, green: 0.65, blue: 0.9)
+                                                  : Color.white.opacity(0.12))
+                        .foregroundStyle(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                    }
+                }
+            }
+        }
+        .padding(.top, 8)
     }
 }
