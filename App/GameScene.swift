@@ -60,8 +60,6 @@ final class GameScene: SKScene {
     private let fireZoneRadius: CGFloat = 100
     private let fireButtonCornerOffset = CGPoint(x: 65, y: 88)
 
-    private let rockCount = 16
-    private let mirrorCount = 8
     private let mirrorHalfLength: Double = 70
 
     private let touchController = TouchController()
