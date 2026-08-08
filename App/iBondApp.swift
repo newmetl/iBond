@@ -18,7 +18,7 @@ enum GamePhase {
 
     var overlayTitle: String {
         switch self {
-        case .menu: return "iBond"
+        case .menu: return "Laser Taser"
         case .playing: return ""
         case .finished: return "Done!"
         case .gameOver: return "Game over!"

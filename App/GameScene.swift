@@ -936,11 +936,79 @@ final class GameScene: SKScene {
             ]))
         }
 
-        // Last one? Let the death animation play, then report the win.
+        // Last one? Celebrate on the live scene, then report the win.
         if world?.bodies.contains(where: { $0.kind.isHostile }) == false {
             gameStarted = false
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+            spawnWinCelebration()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { [weak self] in
                 self?.onAllNPCsEliminated?()
+            }
+        }
+    }
+
+    /// Victory fireworks: staggered multicolor bursts around the player plus
+    /// expanding rings. Runs on the live scene before the overlay appears
+    /// (and keeps sparkling behind it — the scene never pauses).
+    private func spawnWinCelebration() {
+        guard let world,
+              let player = world.playerID.flatMap({ world.body(withID: $0) }) else { return }
+        let center = CGPoint(x: player.position.x, y: player.position.y)
+        let colors: [SKColor] = [
+            SKColor(red: 0.2, green: 0.85, blue: 1, alpha: 1),   // player cyan
+            SKColor(red: 0.3, green: 1, blue: 0.45, alpha: 1),   // battery green
+            SKColor(red: 1, green: 0.9, blue: 0.4, alpha: 1),    // spark yellow
+            SKColor(red: 0.75, green: 0.42, blue: 1, alpha: 1),  // runner purple
+            SKColor(red: 1, green: 0.45, blue: 0.35, alpha: 1),  // shooter red
+            .white,
+        ]
+
+        for burst in 0..<6 {
+            let delay = Double(burst) * 0.22
+            let origin = CGPoint(x: center.x + CGFloat.random(in: -130...130),
+                                 y: center.y + CGFloat.random(in: -150...150))
+
+            let ring = SKShapeNode(circleOfRadius: 16)
+            ring.strokeColor = colors[burst % colors.count]
+            ring.lineWidth = 2.5
+            ring.fillColor = .clear
+            ring.position = origin
+            ring.zPosition = 2.5
+            ring.alpha = 0
+            ring.setScale(0.2)
+            addChild(ring)
+            ring.run(.sequence([
+                .wait(forDuration: delay),
+                .fadeIn(withDuration: 0.05),
+                .group([
+                    .scale(to: 3.0, duration: 0.5),
+                    .sequence([.wait(forDuration: 0.2), .fadeOut(withDuration: 0.3)]),
+                ]),
+                .removeFromParent(),
+            ]))
+
+            for _ in 0..<14 {
+                let dot = SKShapeNode(circleOfRadius: CGFloat.random(in: 2.5...4.5))
+                dot.fillColor = colors.randomElement() ?? .white
+                dot.strokeColor = .clear
+                dot.position = origin
+                dot.zPosition = 2.5
+                dot.alpha = 0
+                addChild(dot)
+                let angle = Double.random(in: 0..<(2 * .pi))
+                let distance = Double.random(in: 50...140)
+                let fly = SKAction.moveBy(x: cos(angle) * distance,
+                                          y: sin(angle) * distance,
+                                          duration: 0.7)
+                fly.timingMode = .easeOut
+                dot.run(.sequence([
+                    .wait(forDuration: delay),
+                    .fadeIn(withDuration: 0.05),
+                    .group([
+                        fly,
+                        .sequence([.wait(forDuration: 0.35), .fadeOut(withDuration: 0.35)]),
+                    ]),
+                    .removeFromParent(),
+                ]))
             }
         }
     }
