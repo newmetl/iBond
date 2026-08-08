@@ -15,15 +15,6 @@ enum GamePhase {
     case playing
     case finished
     case gameOver
-
-    var overlayTitle: String {
-        switch self {
-        case .menu: return "Laser Taser"
-        case .playing: return ""
-        case .finished: return "Done!"
-        case .gameOver: return "Game over!"
-        }
-    }
 }
 
 struct GameView: View {
@@ -33,6 +24,31 @@ struct GameView: View {
         return scene
     }()
     @State private var phase: GamePhase = .menu
+    /// The level currently being played (or about to be); survives relaunches.
+    @AppStorage("currentLevel") private var level = 1
+
+    /// True on the finished overlay after beating the last level.
+    private var wonTheGame: Bool {
+        phase == .finished && level >= LevelConfig.count
+    }
+
+    private var overlayTitle: String {
+        switch phase {
+        case .menu: return "Laser Taser"
+        case .playing: return ""
+        case .finished: return wonTheGame ? "You won!" : "Level \(level) done!"
+        case .gameOver: return "Game over!"
+        }
+    }
+
+    private var buttonTitle: String {
+        switch phase {
+        case .menu: return "Start!"
+        case .playing: return ""
+        case .finished: return wonTheGame ? "Play again" : "Continue"
+        case .gameOver: return "Restart" // retries the same level
+        }
+    }
 
     var body: some View {
         ZStack {
@@ -44,11 +60,14 @@ struct GameView: View {
                 Color.black.opacity(0.6)
                     .ignoresSafeArea()
                 VStack(spacing: 28) {
-                    Text(phase.overlayTitle)
+                    Text(overlayTitle)
                         .font(.system(size: 52, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
-                    Button(phase == .menu ? "Start!" : "Restart") {
-                        scene.startGame()
+                    Button(buttonTitle) {
+                        if phase == .finished {
+                            level = wonTheGame ? 1 : level + 1
+                        }
+                        scene.startGame(level: level)
                         phase = .playing
                     }
                     .font(.title2.bold())
@@ -59,6 +78,7 @@ struct GameView: View {
         }
         .statusBarHidden()
         .onAppear {
+            level = min(max(level, 1), LevelConfig.count) // heal a bad stored value
             scene.onAllNPCsEliminated = { phase = .finished }
             scene.onPlayerKilled = { phase = .gameOver }
         }

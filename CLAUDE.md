@@ -12,8 +12,10 @@ pure-Swift custom physics/raycast engine. Rebuilt from scratch in 2026 from a
   update, circle & segment collisions, laser raycast with mirror reflection,
   line-of-sight), Rect, Laser.swift (LaserHit/Mirror/LaserPath + castLaserPath).
 - `App/` — app layer. `GameScene.swift` (~900 lines: world building, camera,
-  input, all gameplay systems, HUD, effects), `iBondApp.swift` (SwiftUI shell +
-  menu/playing/finished/gameOver overlay state machine), `TouchController.swift`
+  input, all gameplay systems, HUD, effects), `Levels.swift` (LevelConfig +
+  the 10-level table; level 7 = the original single-map game), `iBondApp.swift`
+  (SwiftUI shell + menu/playing/finished/gameOver overlay state machine, level
+  progression persisted via @AppStorage "currentLevel"), `TouchController.swift`
   (touch role assignment by start zone), `Assets.xcassets` (AppIcon).
 - `project.yml` — XcodeGen spec; `iBond.xcodeproj` is GENERATED and gitignored.
 - `docs/superpowers/specs/` — design docs per milestone + current-state doc.
@@ -90,8 +92,11 @@ xcrun devicectl device process launch --device C3A2910A-B2BA-57B7-9A72-A21E30126
   (frames always end in-bounds; tiny transient overlaps heal next frame).
 - `playerControlVelocity` (joystick) overrides `moveTarget` (legacy tap-to-move,
   engine-only now, still tested).
-- Game rules and all tuning constants: top of `GameScene.swift`. Current-state
-  design doc: `docs/superpowers/specs/2026-08-08-laser-taser-current-state.md`.
+- Game rules and non-level tuning constants: top of `GameScene.swift`.
+  Per-level tuning (map scale, enemy/obstacle/battery counts, spawn distances):
+  `App/Levels.swift`. Death retries the same level; finishing level 10 wraps to
+  level 1. Current-state design doc:
+  `docs/superpowers/specs/2026-08-08-laser-taser-current-state.md`.
 
 ## Known seams / deferred work
 
