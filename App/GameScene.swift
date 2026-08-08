@@ -319,7 +319,7 @@ final class GameScene: SKScene {
 
         for body in world.bodies where body.kind == .shooter {
             let aim = SKShapeNode()
-            aim.strokeColor = SKColor(red: 0.3, green: 1, blue: 0.4, alpha: 0.55)
+            aim.strokeColor = SKColor(red: 0.3, green: 1, blue: 0.4, alpha: 0.3)
             aim.lineWidth = 1
             aim.isHidden = true
             aim.zPosition = -0.5
