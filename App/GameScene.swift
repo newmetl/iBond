@@ -43,6 +43,8 @@ final class GameScene: SKScene {
 
     private let shooterCount = 8
     private let batteryDropCount = 2
+    /// Spare batteries lying on the map from the start, findable by exploring.
+    private let initialSpareBatteryCount = 2
     private let runnerCount = 8
     private let shooterMinPlayerDistance: Double = 300
     /// Runners start hunting immediately, so they spawn farther out than
@@ -250,6 +252,18 @@ final class GameScene: SKScene {
 
         self.world = world
         buildNodes(for: world)
+
+        // Scatter a couple of spare batteries for explorers (in addition to
+        // the ones shooters drop). Not right next to the spawn.
+        var placedSpares = 0
+        attempts = 0
+        while placedSpares < initialSpareBatteryCount, attempts < 200 {
+            attempts += 1
+            guard let position = world.randomFreePosition(radius: 12, using: &rng),
+                  position.distance(to: playerStart) > 150 else { continue }
+            spawnBatteryPickup(at: position)
+            placedSpares += 1
+        }
     }
 
     private func buildNodes(for world: World) {
