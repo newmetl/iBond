@@ -381,7 +381,7 @@ final class GameScene: SKScene {
         let hud = SKNode()
         hud.position = CGPoint(x: 0, y: size.height / 2 - 80)
         hud.zPosition = 3
-        hud.alpha = 0.7
+        hud.alpha = 0.85
         camera.addChild(hud)
         batteryHUDNode = hud
 
