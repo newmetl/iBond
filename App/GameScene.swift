@@ -42,7 +42,7 @@ final class GameScene: SKScene {
     private let litterCount = 200
 
     private let shooterCount = 8
-    private let batteryDropCount = 4
+    private let batteryDropCount = 2
     private let runnerCount = 8
     private let shooterMinPlayerDistance: Double = 300
     /// Runners start hunting immediately, so they spawn farther out than
