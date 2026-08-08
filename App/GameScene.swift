@@ -45,9 +45,6 @@ final class GameScene: SKScene {
     /// (about 200 pieces on the original 3×3 map).
     private let litterPerScreen = 22
 
-    /// Seconds a shooter aims (green telegraph line) before the killing shot.
-    private let telegraphDuration: TimeInterval = 1.5
-
     /// Virtual joystick (lower-left): knob travel radius, touch-capture zone,
     /// and the base's offset from the screen corner.
     private let joystickRadius: CGFloat = 70
@@ -67,10 +64,10 @@ final class GameScene: SKScene {
     private var laserNode: SKShapeNode?
     private var sparkNode: SKShapeNode?
 
-    /// Laser battery: seconds of firing time. Drains only while the beam is
-    /// actually rendering; empty battery with NPCs alive means game over.
-    private let laserCapacity: Double = 2
-    private var laserCharge: Double = 2
+    /// Laser battery: seconds of firing time (per-level capacity). Drains only
+    /// while the beam is actually rendering; an empty battery just means the
+    /// laser can't fire until a spare battery is collected.
+    private var laserCharge: Double = 0
     private var batteryHUDNode: SKNode?
     private var batteryFillBar: SKSpriteNode?
     private var enemyDotsNode: SKNode?
@@ -170,7 +167,7 @@ final class GameScene: SKScene {
         batteryFillBar = nil
         enemyDotsNode = nil
         lastEnemyDotCounts = (-1, -1)
-        laserCharge = laserCapacity
+        laserCharge = config.laserCapacity
         beamVisible = false
         shooterAimStart = [:]
         shooterAimNodes = [:]
@@ -189,6 +186,7 @@ final class GameScene: SKScene {
 
         let playerStart = mapSize * 0.5
         world.addPlayer(at: playerStart, radius: playerRadius)
+        world.runnerSpeed = config.runnerSpeed
         var rng = SystemRandomNumberGenerator()
 
         // Mirrors first, then rocks, then enemies — each placement pass avoids
@@ -463,7 +461,7 @@ final class GameScene: SKScene {
     }
 
     private func updateBatteryHUD() {
-        let fraction = CGFloat(laserCharge / laserCapacity)
+        let fraction = CGFloat(laserCharge / config.laserCapacity)
         batteryFillBar?.size = CGSize(width: 22 * max(0, fraction), height: 9)
         batteryFillBar?.color = fraction > 0.55
             ? SKColor(red: 0.3, green: 0.85, blue: 0.35, alpha: 1)   // green: full-ish
@@ -771,7 +769,7 @@ final class GameScene: SKScene {
             aimNode?.path = path
             aimNode?.isHidden = false
 
-            if currentTime - start >= telegraphDuration {
+            if currentTime - start >= config.telegraphDuration {
                 fireShooterBeam(from: body.position, to: player.position)
                 killPlayer()
                 return
@@ -855,7 +853,7 @@ final class GameScene: SKScene {
         batteryPickups.removeAll { pickup in
             let distance = player.position.distance(to: Vector2(pickup.position.x, pickup.position.y))
             guard distance <= player.radius + 14 else { return false }
-            laserCharge = laserCapacity // full recharge
+            laserCharge = config.laserCapacity // full recharge
             pickup.node.run(.sequence([
                 .group([
                     .scale(to: 1.8, duration: 0.2),
