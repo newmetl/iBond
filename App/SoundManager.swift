@@ -14,6 +14,7 @@ final class SoundManager {
     private let steps = makePlayer("runner_steps_loop", volume: 0.4, loops: -1)
     private let zap = makePlayer("shooter_fire", volume: 0.8, loops: 0)
     private let ouch = makePlayer("ouch", volume: 0.8, loops: 0)
+    private let playerDeath = makePlayer("player_death", volume: 0.9, loops: 0)
 
     private static func makePlayer(_ name: String, volume: Float,
                                    loops: Int) -> AVAudioPlayer? {
@@ -38,7 +39,10 @@ final class SoundManager {
     func setRunnersChasing(_ on: Bool) { setLoop(steps, on) }
 
     func playShooterFire() { replay(zap) }
+    /// NPC kills.
     func playOuch() { replay(ouch) }
+    /// The player's own death — longer and deeper than the NPC ouch.
+    func playPlayerDeath() { replay(playerDeath) }
 
     /// Loops pause (not stop) so resuming doesn't restart the waveform.
     private func setLoop(_ player: AVAudioPlayer?, _ on: Bool) {
