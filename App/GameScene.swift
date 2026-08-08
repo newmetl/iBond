@@ -37,8 +37,8 @@ final class GameScene: SKScene {
     /// margins. Generous side/top margins reveal enemies early; the bottom
     /// edge sits at 50% of the screen so downward movement scrolls from the
     /// center line (the corner controls live below it).
-    private let cameraMarginX: CGFloat = 150
-    private let cameraMarginTop: CGFloat = 230
+    private let cameraMarginX: CGFloat = 175
+    private let cameraMarginTop: CGFloat = 280
     private let litterCount = 200
 
     private let shooterCount = 8
@@ -55,13 +55,13 @@ final class GameScene: SKScene {
     /// and the base's offset from the screen corner.
     private let joystickRadius: CGFloat = 70
     private let steeringZoneRadius: CGFloat = 120
-    private let joystickCornerOffset = CGPoint(x: 120, y: 140)
+    private let joystickCornerOffset = CGPoint(x: 95, y: 110)
 
     /// Fire button (lower-right): tap = burst, hold = continuous. The beam
     /// fires along the player's current facing.
     private let fireButtonRadius: CGFloat = 44
     private let fireZoneRadius: CGFloat = 100
-    private let fireButtonCornerOffset = CGPoint(x: 110, y: 150)
+    private let fireButtonCornerOffset = CGPoint(x: 85, y: 115)
 
     private let rockCount = 16
     private let mirrorCount = 8
@@ -79,6 +79,8 @@ final class GameScene: SKScene {
     private var batteryLabel: SKLabelNode?
     private var batteryHUDNode: SKNode?
     private var batteryFillBar: SKSpriteNode?
+    private var enemyDotsNode: SKNode?
+    private var lastEnemyDotCounts: (shooters: Int, runners: Int) = (-1, -1)
     private var frameDt: Double = 0   // last frame's clamped wall-clock dt
     private var beamVisible = false   // tracks show/fade state of beam + spark
 
@@ -134,6 +136,7 @@ final class GameScene: SKScene {
         checkRunnerTouches()
         checkBatteryPickups()
         updateBatteryHUD()
+        updateEnemyDots()
     }
 
     /// Runners wait in ambush until they first scroll into view, then chase
@@ -169,6 +172,8 @@ final class GameScene: SKScene {
         batteryLabel = nil
         batteryHUDNode = nil
         batteryFillBar = nil
+        enemyDotsNode = nil
+        lastEnemyDotCounts = (-1, -1)
         laserCharge = laserCapacity
         beamVisible = false
         shooterAimStart = [:]
@@ -400,6 +405,42 @@ final class GameScene: SKScene {
         label.position = CGPoint(x: -2, y: 0)
         hud.addChild(label)
         batteryLabel = label
+
+        // One dot per remaining enemy, in the enemy's color (see updateEnemyDots).
+        let dots = SKNode()
+        dots.position = CGPoint(x: 0, y: -18)
+        hud.addChild(dots)
+        enemyDotsNode = dots
+    }
+
+    /// Rebuilds the HUD dot row whenever the remaining-enemy counts change:
+    /// red dots for shooters, purple for runners, matching their map colors.
+    private func updateEnemyDots() {
+        guard let world, let enemyDotsNode else { return }
+        var shooters = 0
+        var runners = 0
+        for body in world.bodies {
+            if body.kind == .shooter { shooters += 1 }
+            if body.kind == .runner { runners += 1 }
+        }
+        guard (shooters, runners) != lastEnemyDotCounts else { return }
+        lastEnemyDotCounts = (shooters, runners)
+
+        enemyDotsNode.removeAllChildren()
+        let total = shooters + runners
+        guard total > 0 else { return }
+        let spacing: CGFloat = 12
+        var x = -CGFloat(total - 1) * spacing / 2
+        for index in 0..<total {
+            let dot = SKShapeNode(circleOfRadius: 3.5)
+            dot.fillColor = index < shooters
+                ? SKColor(red: 1, green: 0.45, blue: 0.35, alpha: 1)   // shooter red
+                : SKColor(red: 0.75, green: 0.42, blue: 1, alpha: 1)   // runner purple
+            dot.strokeColor = .clear
+            dot.position = CGPoint(x: x, y: 0)
+            enemyDotsNode.addChild(dot)
+            x += spacing
+        }
     }
 
     private func updateBatteryHUD() {
