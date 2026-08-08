@@ -128,6 +128,18 @@ final class GameScene: SKScene {
         checkBatteryPickups()
         updateBatteryHUD()
         updateEnemyDots()
+        updateSounds()
+    }
+
+    /// Toggles the looped audio layers to match this frame's state.
+    private func updateSounds() {
+        let sound = SoundManager.shared
+        sound.setLaserFiring(beamVisible)
+        sound.setShooterAiming(gameStarted && !shooterAimStart.isEmpty)
+        let chasing = gameStarted && world.map { w in
+            w.bodies.contains { $0.kind == .runner && w.activeRunnerIDs.contains($0.id) }
+        } == true
+        sound.setRunnersChasing(chasing)
     }
 
     /// Runners wait in ambush until they first scroll into view, then chase
@@ -174,6 +186,7 @@ final class GameScene: SKScene {
         batteryCarrierIDs = []
         batteryPickups = []
         gameStarted = true
+        SoundManager.shared.startMusic()
         ensureWorld() // builds now if the scene is laid out; else on next update
     }
 
@@ -793,6 +806,7 @@ final class GameScene: SKScene {
             .fadeOut(withDuration: 0.4),
             .removeFromParent(),
         ]))
+        SoundManager.shared.playShooterFire()
     }
 
     private func checkRunnerTouches() {
@@ -811,6 +825,7 @@ final class GameScene: SKScene {
         guard gameStarted, let world, let pid = world.playerID else { return }
         gameStarted = false
         world.remove(bodyID: pid) // runners stand down without a target
+        SoundManager.shared.playOuch()
         fireButtonHeld = false
         fadeOutBeamIfNeeded()
         for node in shooterAimNodes.values { node.isHidden = true }
@@ -916,6 +931,7 @@ final class GameScene: SKScene {
     private func kill(npcID: BodyID, at hitPoint: Vector2) {
         let dropPosition = world?.body(withID: npcID)?.position
         world?.remove(bodyID: npcID)
+        SoundManager.shared.playOuch()
 
         // Same impact spark as at the world's edge, as a short burst — the NPC
         // is gone instantly, so the spark lives just long enough to register.

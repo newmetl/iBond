@@ -17,7 +17,9 @@ pure-Swift custom physics/raycast engine. Rebuilt from scratch in 2026 from a
   original single-map game), `iBondApp.swift`
   (SwiftUI shell + menu/playing/finished/gameOver overlay state machine, level
   progression persisted via @AppStorage "currentLevel"), `TouchController.swift`
-  (touch role assignment by start zone), `Assets.xcassets` (AppIcon).
+  (touch role assignment by start zone), `SoundManager.swift` + `Sounds/*.wav`
+  (AVFoundation loops/one-shots; WAVs synthesized by `tools/generate_sounds.py`),
+  `Assets.xcassets` (AppIcon).
 - `project.yml` — XcodeGen spec; `iBond.xcodeproj` is GENERATED and gitignored.
 - `docs/superpowers/specs/` — design docs per milestone + current-state doc.
   `docs/superpowers/plans/` — the milestone-1 implementation plan.
