@@ -36,15 +36,18 @@ final class GameScene: SKScene {
     private var level = 1
     private var config = LevelConfig.forLevel(1)
     /// Camera follow box: the camera scrolls once the player crosses these
-    /// margins, expressed as fractions of the half-screen so the box scales
-    /// with orientation (absolute portrait margins made the box degenerate in
-    /// landscape). On a 402×874 portrait screen these match the original
-    /// 175pt side / 280pt top margins; in landscape the box is much smaller.
-    /// Generous side/top margins reveal enemies early; the bottom edge sits
-    /// at 50% of the screen so downward movement scrolls from the center
-    /// line (the corner controls live below it).
-    private let cameraMarginXFraction: CGFloat = 0.87
-    private let cameraMarginTopFraction: CGFloat = 0.64
+    /// margins, expressed as fractions of the half-screen. Portrait matches
+    /// the original 175pt side / 280pt top margins (on a 402×874 screen).
+    /// Landscape trades the axes: near-zero horizontal slack so the camera
+    /// leads sideways movement early (half a screen of look-ahead toward
+    /// approaching runners), but generous vertical slack because the short
+    /// axis would otherwise scroll on every wiggle. The box bottom always
+    /// sits at 50% of the screen so downward movement scrolls from the
+    /// center line (the corner controls live below it).
+    private let portraitMarginXFraction: CGFloat = 0.87
+    private let portraitMarginTopFraction: CGFloat = 0.64
+    private let landscapeMarginXFraction: CGFloat = 0.94
+    private let landscapeMarginTopFraction: CGFloat = 0.35
     /// Decorative litter density is constant per screen of map area
     /// (about 200 pieces on the original 3×3 map).
     private let litterPerScreen = 22
@@ -737,8 +740,11 @@ final class GameScene: SKScene {
         var cam = cameraNode.position
         let halfW = size.width / 2
         let halfH = size.height / 2
-        let marginX = halfW * cameraMarginXFraction
-        let marginTop = halfH * cameraMarginTopFraction
+        let isLandscape = size.width > size.height
+        let marginX = halfW * (isLandscape ? landscapeMarginXFraction
+                                           : portraitMarginXFraction)
+        let marginTop = halfH * (isLandscape ? landscapeMarginTopFraction
+                                             : portraitMarginTopFraction)
         let marginBottom = halfH // box bottom = screen center line
         let px = CGFloat(player.position.x)
         let py = CGFloat(player.position.y)
