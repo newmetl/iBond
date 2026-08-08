@@ -31,25 +31,20 @@ final class GameScene: SKScene {
     private let playerRadius: Double = 16
     private let npcRadius: Double = 14
 
-    /// The map spans this many screens in each dimension; the camera scrolls.
-    private let mapScale: CGFloat = 3
+    /// Everything level-dependent (map scale, enemy counts, obstacles,
+    /// batteries, spawn distances) lives in the level table: Levels.swift.
+    private var level = 1
+    private var config = LevelConfig.forLevel(1)
     /// Camera follow box: the camera scrolls once the player crosses these
     /// margins. Generous side/top margins reveal enemies early; the bottom
     /// edge sits at 50% of the screen so downward movement scrolls from the
     /// center line (the corner controls live below it).
     private let cameraMarginX: CGFloat = 175
     private let cameraMarginTop: CGFloat = 280
-    private let litterCount = 200
+    /// Decorative litter density is constant per screen of map area
+    /// (about 200 pieces on the original 3×3 map).
+    private let litterPerScreen = 22
 
-    private let shooterCount = 8
-    private let batteryDropCount = 2
-    /// Spare batteries lying on the map from the start, findable by exploring.
-    private let initialSpareBatteryCount = 2
-    private let runnerCount = 8
-    private let shooterMinPlayerDistance: Double = 300
-    /// Runners start hunting immediately, so they spawn farther out than
-    /// shooters — closer spawns ended games before the first screenshot.
-    private let runnerMinPlayerDistance: Double = 520
     /// Seconds a shooter aims (green telegraph line) before the killing shot.
     private let telegraphDuration: TimeInterval = 1.5
 
@@ -154,9 +149,12 @@ final class GameScene: SKScene {
 
     // MARK: - World setup
 
-    /// Starts a fresh game: tears down any previous world/nodes and builds a
-    /// new one (player centered, NPCs re-randomized). Called from the menu.
-    func startGame() {
+    /// Starts a fresh game on the given level: tears down any previous
+    /// world/nodes and builds a new one (player centered, NPCs re-randomized).
+    /// Called from the menu / continue / restart overlay.
+    func startGame(level: Int) {
+        self.level = level
+        config = LevelConfig.forLevel(level)
         removeAllChildren()
         camera = nil
         cameraNode = nil
@@ -188,7 +186,7 @@ final class GameScene: SKScene {
     /// created lazily on the first sized update after the game starts.
     private func ensureWorld() {
         guard gameStarted, world == nil, size.width > 0, size.height > 0 else { return }
-        let mapSize = Vector2(size.width * mapScale, size.height * mapScale)
+        let mapSize = Vector2(size.width * config.mapScale, size.height * config.mapScale)
         let world = World(size: mapSize)
 
         let playerStart = mapSize * 0.5
@@ -200,14 +198,14 @@ final class GameScene: SKScene {
         let inset = 120.0
         let field = Rect(min: Vector2(inset, inset),
                          max: Vector2(mapSize.x - inset, mapSize.y - inset))
-        for _ in 0..<mirrorCount {
+        for _ in 0..<config.mirrorCount {
             guard let center = world.randomFreePosition(radius: mirrorHalfLength + 10,
                                                         in: field, using: &rng) else { break }
             let angle = Double.random(in: 0..<Double.pi, using: &rng)
             let along = Vector2(cos(angle), sin(angle)) * mirrorHalfLength
             world.addMirror(from: center - along, to: center + along)
         }
-        for _ in 0..<rockCount {
+        for _ in 0..<config.rockCount {
             let radius = Double.random(in: 38...56, using: &rng)
             guard let position = world.randomFreePosition(radius: radius, in: field,
                                                           using: &rng) else { break }
@@ -219,14 +217,14 @@ final class GameScene: SKScene {
         let rocks = world.rockIDs.compactMap { world.body(withID: $0) }
         var placedShooters = 0
         var attempts = 0
-        while placedShooters < shooterCount, attempts < 300, let rock = rocks.randomElement(using: &rng) {
+        while placedShooters < config.shooterCount, attempts < 300, let rock = rocks.randomElement(using: &rng) {
             attempts += 1
             let angle = Double.random(in: 0..<(2 * .pi), using: &rng)
             let dist = rock.radius + npcRadius + Double.random(in: 4...26, using: &rng)
             let candidate = rock.position + Vector2(cos(angle), sin(angle)) * dist
             guard candidate.x > 20, candidate.x < mapSize.x - 20,
                   candidate.y > 20, candidate.y < mapSize.y - 20,
-                  candidate.distance(to: playerStart) > shooterMinPlayerDistance,
+                  candidate.distance(to: playerStart) > config.shooterMinPlayerDistance,
                   world.bodies.allSatisfy({ $0.position.distance(to: candidate) >= $0.radius + npcRadius + 6 })
             else { continue }
             let id = world.addShooter(at: candidate, radius: npcRadius)
@@ -236,16 +234,16 @@ final class GameScene: SKScene {
                 world.remove(bodyID: id)
                 continue
             }
-            if batteryCarrierIDs.count < batteryDropCount { batteryCarrierIDs.insert(id) }
+            if batteryCarrierIDs.count < config.batteryDropCount { batteryCarrierIDs.insert(id) }
             placedShooters += 1
         }
 
         var placedRunners = 0
         attempts = 0
-        while placedRunners < runnerCount, attempts < 300 {
+        while placedRunners < config.runnerCount, attempts < 300 {
             attempts += 1
             guard let position = world.randomFreePosition(radius: npcRadius, using: &rng),
-                  position.distance(to: playerStart) > runnerMinPlayerDistance else { continue }
+                  position.distance(to: playerStart) > config.runnerMinPlayerDistance else { continue }
             world.addRunner(at: position, radius: npcRadius)
             placedRunners += 1
         }
@@ -257,7 +255,7 @@ final class GameScene: SKScene {
         // the ones shooters drop). Not right next to the spawn.
         var placedSpares = 0
         attempts = 0
-        while placedSpares < initialSpareBatteryCount, attempts < 200 {
+        while placedSpares < config.initialSpareBatteryCount, attempts < 200 {
             attempts += 1
             guard let position = world.randomFreePosition(radius: 12, using: &rng),
                   position.distance(to: playerStart) > 150 else { continue }
@@ -276,6 +274,7 @@ final class GameScene: SKScene {
 
         // Decorative ground litter — small translucent stones/rubbish that
         // make the camera scroll visible. Purely cosmetic, no interaction.
+        let litterCount = Int(Double(litterPerScreen) * Double(config.mapScale * config.mapScale))
         for _ in 0..<litterCount {
             let litter: SKShapeNode
             if Bool.random() {
@@ -417,6 +416,16 @@ final class GameScene: SKScene {
         fill.position = CGPoint(x: -11, y: 0)
         hud.addChild(fill)
         batteryFillBar = fill
+
+        // Current level, to the left of the battery icon.
+        let levelLabel = SKLabelNode(text: "LVL \(level)")
+        levelLabel.fontName = "HelveticaNeue-Bold"
+        levelLabel.fontSize = 13
+        levelLabel.fontColor = SKColor(white: 1, alpha: 0.85)
+        levelLabel.horizontalAlignmentMode = .right
+        levelLabel.verticalAlignmentMode = .center
+        levelLabel.position = CGPoint(x: -32, y: 0)
+        hud.addChild(levelLabel)
 
         // One dot per remaining enemy, in the enemy's color (see updateEnemyDots).
         let dots = SKNode()
