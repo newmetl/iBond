@@ -839,7 +839,7 @@ final class GameScene: SKScene {
         guard gameStarted, let world, let pid = world.playerID else { return }
         gameStarted = false
         world.remove(bodyID: pid) // runners stand down without a target
-        SoundManager.shared.playOuch()
+        SoundManager.shared.playPlayerDeath()
         fireButtonHeld = false
         fadeOutBeamIfNeeded()
         for node in shooterAimNodes.values { node.isHidden = true }

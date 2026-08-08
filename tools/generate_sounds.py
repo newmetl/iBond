@@ -130,3 +130,22 @@ for i in range(n):
     lp += 0.08 * (random.uniform(-1, 1) - lp)
     music[i] += 0.14 * swell * lp
 write_wav("App/Sounds/music_loop.wav", music, MRATE)
+
+# --- Player death "NOOOO": long dramatic two-stage fall, one-shot ------------
+# Deeper and much longer than the NPC ouch so your own death is unmistakable:
+# impact noise, then a square-wave wail sliding 500 -> 100 Hz with widening
+# vibrato and a low sine underneath.
+n = int(0.8 * RATE)
+death = []
+phase = 0.0
+for i in range(n):
+    t = i / RATE
+    freq = 500 * (100 / 500) ** (t / 0.8)
+    freq *= 1.0 + (0.03 + 0.08 * t) * math.sin(2 * math.pi * 11 * t)
+    phase += freq / RATE
+    env = min(1.0, t / 0.012) * math.exp(-t / 0.35)
+    s = 0.55 * square(phase) + 0.35 * math.sin(math.pi * phase)  # sub-octave sine
+    if t < 0.05:
+        s += (1.0 - t / 0.05) * 0.7 * random.uniform(-1, 1)
+    death.append(env * s)
+write_wav("App/Sounds/player_death.wav", death, RATE)
