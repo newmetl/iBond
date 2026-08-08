@@ -47,9 +47,9 @@ final class GameScene: SKScene {
     private let portraitMarginXFraction: CGFloat = 0.87
     private let portraitMarginTopFraction: CGFloat = 0.64
     private let landscapeMarginXFraction: CGFloat = 0.94
-    /// 0.6 keeps the player ~120pt clear of the top edge (0.35 let them get
-    /// within ~70pt, which read as "no warning" for runners entering above).
-    private let landscapeMarginTopFraction: CGFloat = 0.6
+    /// 0.8 keeps the player ~160pt clear of the top edge (0.35 and 0.6 both
+    /// still read as "no warning" for runners entering from above).
+    private let landscapeMarginTopFraction: CGFloat = 0.8
     /// Decorative litter density is constant per screen of map area
     /// (about 200 pieces on the original 3×3 map).
     private let litterPerScreen = 22
