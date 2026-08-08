@@ -47,14 +47,9 @@ struct GameView: View {
                     Text(phase.overlayTitle)
                         .font(.system(size: 52, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
-                    Button(phase == .menu ? "Start!" : phase == .gameOver ? "Restart" : "Back") {
-                        switch phase {
-                        case .menu, .gameOver:
-                            scene.startGame()
-                            phase = .playing
-                        default: // .finished — back to the menu
-                            phase = .menu
-                        }
+                    Button(phase == .menu ? "Start!" : "Restart") {
+                        scene.startGame()
+                        phase = .playing
                     }
                     .font(.title2.bold())
                     .buttonStyle(.borderedProminent)

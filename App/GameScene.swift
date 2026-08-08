@@ -76,7 +76,6 @@ final class GameScene: SKScene {
     /// actually rendering; empty battery with NPCs alive means game over.
     private let laserCapacity: Double = 2
     private var laserCharge: Double = 2
-    private var batteryLabel: SKLabelNode?
     private var batteryHUDNode: SKNode?
     private var batteryFillBar: SKSpriteNode?
     private var enemyDotsNode: SKNode?
@@ -169,7 +168,6 @@ final class GameScene: SKScene {
         laserNode = nil
         sparkNode = nil
         fireButtonHeld = false
-        batteryLabel = nil
         batteryHUDNode = nil
         batteryFillBar = nil
         enemyDotsNode = nil
@@ -296,6 +294,14 @@ final class GameScene: SKScene {
                 : SKColor(red: 1, green: 0.45, blue: 0.35, alpha: 1)  // red: shoots
             let node = makeCircleNode(radius: body.radius, fill: fill)
             node.zPosition = 0
+            // Facing line: shows where the enemy aims (shooter) or runs (runner).
+            let facingPath = CGMutablePath()
+            facingPath.move(to: .zero)
+            facingPath.addLine(to: CGPoint(x: body.radius * 1.7, y: 0))
+            let facingLine = SKShapeNode(path: facingPath)
+            facingLine.strokeColor = SKColor(white: 1, alpha: 0.7)
+            facingLine.lineWidth = 1.5
+            node.addChild(facingLine)
             addChild(node)
             npcNodes[body.id] = node
         }
@@ -370,11 +376,12 @@ final class GameScene: SKScene {
         camera.addChild(fire)
         fireButton = fire
 
-        // Battery HUD (rides the camera): icon with a color-coded charge bar
-        // plus the remaining firing time.
+        // Battery HUD (rides the camera): icon with a color-coded charge bar;
+        // slightly transparent so it doesn't compete with the action.
         let hud = SKNode()
         hud.position = CGPoint(x: 0, y: size.height / 2 - 80)
         hud.zPosition = 3
+        hud.alpha = 0.7
         camera.addChild(hud)
         batteryHUDNode = hud
 
@@ -382,29 +389,20 @@ final class GameScene: SKScene {
         iconBody.strokeColor = SKColor(white: 1, alpha: 0.85)
         iconBody.lineWidth = 1.5
         iconBody.fillColor = .clear
-        iconBody.position = CGPoint(x: -28, y: 0)
+        iconBody.position = .zero
         hud.addChild(iconBody)
 
         let iconTip = SKShapeNode(rectOf: CGSize(width: 3, height: 6), cornerRadius: 1)
         iconTip.strokeColor = .clear
         iconTip.fillColor = SKColor(white: 1, alpha: 0.85)
-        iconTip.position = CGPoint(x: -28 + 13 + 2.5, y: 0)
+        iconTip.position = CGPoint(x: 15.5, y: 0)
         hud.addChild(iconTip)
 
         let fill = SKSpriteNode(color: .green, size: CGSize(width: 22, height: 9))
         fill.anchorPoint = CGPoint(x: 0, y: 0.5)
-        fill.position = CGPoint(x: -28 - 11, y: 0)
+        fill.position = CGPoint(x: -11, y: 0)
         hud.addChild(fill)
         batteryFillBar = fill
-
-        let label = SKLabelNode(fontNamed: "Menlo-Bold")
-        label.fontSize = 15
-        label.fontColor = SKColor(white: 1, alpha: 0.85)
-        label.horizontalAlignmentMode = .left
-        label.verticalAlignmentMode = .center
-        label.position = CGPoint(x: -2, y: 0)
-        hud.addChild(label)
-        batteryLabel = label
 
         // One dot per remaining enemy, in the enemy's color (see updateEnemyDots).
         let dots = SKNode()
@@ -444,7 +442,6 @@ final class GameScene: SKScene {
     }
 
     private func updateBatteryHUD() {
-        batteryLabel?.text = String(format: "%.2fs", laserCharge)
         let fraction = CGFloat(laserCharge / laserCapacity)
         batteryFillBar?.size = CGSize(width: 22 * max(0, fraction), height: 9)
         batteryFillBar?.color = fraction > 0.55
@@ -534,7 +531,18 @@ final class GameScene: SKScene {
                 lastPlayerPosition = position
                 playerNode?.position = position
             case .npc, .shooter, .runner:
-                npcNodes[body.id]?.position = CGPoint(x: body.position.x, y: body.position.y)
+                guard let node = npcNodes[body.id] else { break }
+                node.position = CGPoint(x: body.position.x, y: body.position.y)
+                // Shooters track the player; runners face their movement.
+                if body.kind == .shooter,
+                   let target = world.playerID.flatMap({ world.body(withID: $0)?.position }) {
+                    let toPlayer = target - body.position
+                    if toPlayer.length > 1 {
+                        node.zRotation = CGFloat(atan2(toPlayer.y, toPlayer.x))
+                    }
+                } else if body.kind == .runner, body.velocity.length > 1 {
+                    node.zRotation = CGFloat(atan2(body.velocity.y, body.velocity.x))
+                }
             case .rock:
                 break // static; the node was positioned once at build time
             }
@@ -834,8 +842,34 @@ final class GameScene: SKScene {
                 ]),
                 .removeFromParent(),
             ]))
+            spawnRechargeEffect(at: player.position)
             return true
         }
+    }
+
+    /// Energy-hit feedback on collecting a spare: a green ring bursts out of
+    /// the player and the battery icon pulses.
+    private func spawnRechargeEffect(at position: Vector2) {
+        let ring = SKShapeNode(circleOfRadius: 18)
+        ring.strokeColor = SKColor(red: 0.3, green: 1, blue: 0.45, alpha: 0.9)
+        ring.lineWidth = 3
+        ring.glowWidth = 4
+        ring.fillColor = .clear
+        ring.position = CGPoint(x: position.x, y: position.y)
+        ring.zPosition = 1.6
+        ring.setScale(0.3)
+        addChild(ring)
+        ring.run(.sequence([
+            .group([
+                .scale(to: 2.2, duration: 0.35),
+                .fadeOut(withDuration: 0.35),
+            ]),
+            .removeFromParent(),
+        ]))
+        batteryHUDNode?.run(.sequence([
+            .scale(to: 1.25, duration: 0.1),
+            .scale(to: 1.0, duration: 0.15),
+        ]))
     }
 
     /// Beam/spark visibility: showing is instant (cancels any running fade);
