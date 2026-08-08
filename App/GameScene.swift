@@ -46,7 +46,9 @@ final class GameScene: SKScene {
     /// center line (the corner controls live below it).
     private let portraitMarginXFraction: CGFloat = 0.87
     private let portraitMarginTopFraction: CGFloat = 0.64
-    private let landscapeMarginXFraction: CGFloat = 0.94
+    /// 0.8 gives ±87pt of horizontal slack (0.94's ±26pt scrolled on
+    /// every step and felt twitchy).
+    private let landscapeMarginXFraction: CGFloat = 0.8
     /// 0.8 keeps the player ~160pt clear of the top edge (0.35 and 0.6 both
     /// still read as "no warning" for runners entering from above).
     private let landscapeMarginTopFraction: CGFloat = 0.8
