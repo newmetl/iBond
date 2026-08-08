@@ -763,10 +763,10 @@ final class GameScene: SKScene {
         let path = CGMutablePath()
         path.move(to: CGPoint(x: from.x, y: from.y))
         path.addLine(to: CGPoint(x: to.x, y: to.y))
+        // Same thin crisp look as the player's beam, just green.
         let beam = SKShapeNode(path: path)
         beam.strokeColor = SKColor(red: 0.25, green: 1, blue: 0.4, alpha: 1)
-        beam.lineWidth = 2.5
-        beam.glowWidth = 4
+        beam.lineWidth = 1.5
         beam.zPosition = 1.5
         addChild(beam)
         beam.run(.sequence([
