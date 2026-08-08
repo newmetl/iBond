@@ -43,20 +43,20 @@ shooters (4), mirrors + map spares (5).
 
 ## Difficulty axes (added same day)
 
-Four per-level axes tighten continuously (Wojtek's request; endpoints for
-battery were specified as 30s → 1s):
+Four per-level axes tighten continuously (Wojtek's request; battery originally
+30s → 1s, retuned same day to 10s → 1s — 30s trivialized early levels):
 
 | Lvl | Battery (s) | Runner speed | Telegraph (s) | Rocks/Mirrors |
 |----|------|-----|-----|--------|
-| 1  | 30   | 110 | 2.5 | 0 / 0  |
-| 2  | 20   | 120 | 2.3 | 0 / 0  |
-| 3  | 14   | 130 | 2.1 | 3 / 0  |
-| 4  | 10   | 140 | 1.9 | 6 / 0  |
-| 5  | 7    | 150 | 1.7 | 9 / 2  |
-| 6  | 4.5  | 160 | 1.6 | 11 / 5 |
-| 7  | 3    | 170 | 1.5 | 16 / 8 |
-| 8  | 2    | 185 | 1.3 | 16 / 12 |
-| 9  | 1.5  | 205 | 1.1 | 18 / 18 |
+| 1  | 10   | 110 | 2.5 | 0 / 0  |
+| 2  | 7.5  | 120 | 2.3 | 0 / 0  |
+| 3  | 6    | 130 | 2.1 | 3 / 0  |
+| 4  | 4.5  | 140 | 1.9 | 6 / 0  |
+| 5  | 3.5  | 150 | 1.7 | 9 / 2  |
+| 6  | 2.8  | 160 | 1.6 | 11 / 5 |
+| 7  | 2.2  | 170 | 1.5 | 16 / 8 |
+| 8  | 1.7  | 185 | 1.3 | 16 / 12 |
+| 9  | 1.3  | 205 | 1.1 | 18 / 18 |
 | 10 | 1    | 225 | 0.9 | 16 / 26 |
 
 Level 7 keeps the original constants (170 runner speed, 1.5s telegraph);
@@ -76,10 +76,10 @@ Generated table (from `LevelConfig.forLevel`):
 
 ```
 Lvl  map  run  sho  rock mirr drop spare  batt  speed  tele
-  1  1.00    1    0     0    0    0     0   30.0    110  2.50
-  5  1.00    3    1     3    0    0     0   14.6    129  2.12
- 10  2.00    5    4    10    3    1     1    6.3    153  1.67
- 14  3.00    8    8    16    9    2     2    2.8    172  1.47
+  1  1.00    1    0     0    0    0     0   10.0    110  2.50
+  5  1.00    3    1     3    0    0     0    6.2    129  2.12
+ 10  2.00    5    4    10    3    1     1    3.3    153  1.67
+ 14  3.00    8    8    16    9    2     2    2.1    172  1.47
  20  4.00   15   14    16   26    3     3    1.0    225  0.90
 ```
 
