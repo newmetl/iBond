@@ -64,6 +64,25 @@ player speed stays 320. The mirror share of obstacles grows from 0% to ~60%
 (mirrors punish stray shots). `World.runnerSpeed` was already a public engine
 var, so all axes are app-layer.
 
+## 20 levels via interpolation (added same day)
+
+The game now has **20 levels**. The 10 hand-tuned rows above became **anchor
+rows**: level 1 = anchor 1, level 20 = anchor 10, and every attribute (map
+scale included, so maps grow through fractional sizes like 1.37× screens) is
+linearly interpolated between neighboring anchors; integer counts round, and
+battery drops clamp to the shooter count. Tuning an anchor reshapes the curve
+around it. The original pre-levels game (anchor 7) now sits at ≈ level 14.
+Generated table (from `LevelConfig.forLevel`):
+
+```
+Lvl  map  run  sho  rock mirr drop spare  batt  speed  tele
+  1  1.00    1    0     0    0    0     0   30.0    110  2.50
+  5  1.00    3    1     3    0    0     0   14.6    129  2.12
+ 10  2.00    5    4    10    3    1     1    6.3    153  1.67
+ 14  3.00    8    8    16    9    2     2    2.8    172  1.47
+ 20  4.00   15   14    16   26    3     3    1.0    225  0.90
+```
+
 ## Dev menu
 
 A translucent wrench icon (top-right) on every overlay (menu/finished/game
