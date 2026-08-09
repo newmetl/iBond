@@ -106,17 +106,17 @@ struct LevelConfig {
         row(1.0, r: [2, 0, 0], s: [0, 0, 0], h: [0, 0, 0], rocks: 0, mirrors: 0, spares: [0, 0, 0], carriers: [0, 0]), // 1
         row(1.0, r: [3, 0, 0], s: [0, 0, 0], h: [0, 0, 0], rocks: 0, mirrors: 0, spares: [0, 0, 0], carriers: [0, 0]),
         row(1.0, r: [4, 0, 0], s: [0, 0, 0], h: [0, 0, 0], rocks: 3, mirrors: 0, spares: [0, 0, 0], carriers: [0, 0]),
-        row(1.0, r: [5, 0, 0], s: [0, 0, 0], h: [0, 0, 0], rocks: 3, mirrors: 0, spares: [1, 0, 0], carriers: [0, 0]),
-        row(1.0, r: [6, 0, 0], s: [0, 0, 0], h: [0, 0, 0], rocks: 3, mirrors: 0, spares: [1, 0, 0], carriers: [0, 0]),
-        row(1.5, r: [7, 0, 0], s: [0, 0, 0], h: [0, 0, 0], rocks: 3, mirrors: 1, spares: [1, 0, 0], carriers: [0, 0]),
-        row(1.5, r: [8, 0, 0], s: [0, 0, 0], h: [0, 0, 0], rocks: 4, mirrors: 1, spares: [2, 0, 0], carriers: [0, 0]),
-        row(1.5, r: [9, 0, 0], s: [0, 0, 0], h: [0, 0, 0], rocks: 4, mirrors: 1, spares: [2, 0, 0], carriers: [0, 0]),
-        row(1.5, r: [10, 0, 0], s: [0, 0, 0], h: [0, 0, 0], rocks: 4, mirrors: 1, spares: [2, 0, 0], carriers: [0, 0]),
-        row(2.0, r: [4, 0, 0], s: [0, 0, 0], h: [0, 0, 0], rocks: 6, mirrors: 3, spares: [1, 3, 0], carriers: [0, 0], bosses: [BossSpec(kind: .runner, tier: 0, shield: 14)]), // 10
-        row(1.5, r: [5, 0, 0], s: [1, 0, 0], h: [0, 0, 0], rocks: 5, mirrors: 2, spares: [2, 0, 0], carriers: [0, 0]), // 11
-        row(1.5, r: [5, 0, 0], s: [1, 0, 0], h: [0, 0, 0], rocks: 5, mirrors: 2, spares: [2, 0, 0], carriers: [1, 0]),
-        row(1.5, r: [5, 0, 0], s: [2, 0, 0], h: [0, 0, 0], rocks: 5, mirrors: 2, spares: [2, 0, 0], carriers: [1, 0]),
-        row(1.5, r: [6, 0, 0], s: [2, 0, 0], h: [0, 0, 0], rocks: 5, mirrors: 2, spares: [2, 0, 0], carriers: [1, 0]),
+        row(1.0, r: [5, 0, 0], s: [0, 0, 0], h: [0, 0, 0], rocks: 3, mirrors: 0, spares: [0, 0, 0], carriers: [0, 0]),
+        row(1.0, r: [6, 0, 0], s: [0, 0, 0], h: [0, 0, 0], rocks: 3, mirrors: 0, spares: [0, 0, 0], carriers: [0, 0]),
+        row(1.5, r: [7, 0, 0], s: [0, 0, 0], h: [0, 0, 0], rocks: 3, mirrors: 1, spares: [0, 0, 0], carriers: [0, 0]),
+        row(1.5, r: [8, 0, 0], s: [0, 0, 0], h: [0, 0, 0], rocks: 4, mirrors: 1, spares: [0, 0, 0], carriers: [0, 0]),
+        row(1.5, r: [9, 0, 0], s: [0, 0, 0], h: [0, 0, 0], rocks: 4, mirrors: 1, spares: [0, 0, 0], carriers: [0, 0]),
+        row(1.5, r: [10, 0, 0], s: [0, 0, 0], h: [0, 0, 0], rocks: 4, mirrors: 1, spares: [0, 0, 0], carriers: [0, 0]),
+        row(2.0, r: [4, 0, 0], s: [0, 0, 0], h: [0, 0, 0], rocks: 6, mirrors: 3, spares: [6, 0, 0], carriers: [0, 0], bosses: [BossSpec(kind: .runner, tier: 0, shield: 14)]), // 10
+        row(1.5, r: [5, 0, 0], s: [1, 0, 0], h: [0, 0, 0], rocks: 5, mirrors: 2, spares: [1, 0, 0], carriers: [0, 0]), // 11
+        row(1.5, r: [5, 0, 0], s: [1, 0, 0], h: [0, 0, 0], rocks: 5, mirrors: 2, spares: [1, 0, 0], carriers: [1, 0]),
+        row(1.5, r: [5, 0, 0], s: [2, 0, 0], h: [0, 0, 0], rocks: 5, mirrors: 2, spares: [1, 0, 0], carriers: [1, 0]),
+        row(1.5, r: [6, 0, 0], s: [2, 0, 0], h: [0, 0, 0], rocks: 5, mirrors: 2, spares: [1, 0, 0], carriers: [1, 0]),
         row(1.5, r: [6, 0, 0], s: [3, 0, 0], h: [0, 0, 0], rocks: 6, mirrors: 2, spares: [2, 0, 0], carriers: [2, 0]),
         row(2.0, r: [6, 0, 0], s: [3, 0, 0], h: [0, 0, 0], rocks: 6, mirrors: 3, spares: [2, 0, 0], carriers: [2, 0]),
         row(2.0, r: [7, 0, 0], s: [4, 0, 0], h: [0, 0, 0], rocks: 6, mirrors: 3, spares: [2, 0, 0], carriers: [2, 0]),
