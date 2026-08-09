@@ -10,8 +10,9 @@ enum BatteryType: Int, CaseIterable {
     case white  // quadruple power; flies straight through rocks, mirrors,
                 // and every enemy on the line (no reflection, no self-hit)
 
-    /// Seconds of firing time when full.
-    var capacity: Double { [3.0, 2.0, 1.0][rawValue] }
+    /// Seconds of firing time when full (uniform across types since
+    /// 2026-08-09 — the power multiplier alone differentiates them).
+    var capacity: Double { [3.0, 3.0, 3.0][rawValue] }
     /// Damage multiplier vs shields (kill time = shield / power).
     var power: Double { [1.0, 2.0, 4.0][rawValue] }
     var piercing: Bool { self == .white }
