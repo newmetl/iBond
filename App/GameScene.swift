@@ -36,8 +36,9 @@ final class GameScene: SKScene {
 
     private var shooterAimStart: [BodyID: TimeInterval] = [:]
     private var shooterAimNodes: [BodyID: SKShapeNode] = [:]
-    private var batteryCarrierIDs: Set<BodyID> = []
-    private var batteryPickups: [(position: CGPoint, node: SKShapeNode)] = []
+    /// Designated carriers and what they drop (shooters→red, hunters→orange).
+    private var batteryCarriers: [BodyID: BatteryType] = [:]
+    private var batteryPickups: [(position: CGPoint, node: SKShapeNode, type: BatteryType)] = []
 
     private var lastUpdateTime: TimeInterval?
     private var accumulator: Double = 0
@@ -85,16 +86,12 @@ final class GameScene: SKScene {
 
     private let mirrorHalfLength: Double = 70
 
-    /// Hunter (patrolling armored shooter): ambles until it notices the
-    /// player, then loops run-closer → aim 500ms at a locked point → shoot.
-    /// The locked aim makes the shot dodgeable; armor means a single minimum
-    /// burst (0.2s) can't kill it.
+    /// Hunter (patrolling shooter): ambles until it notices the player, then
+    /// loops run-closer → aim at a locked point → shoot. The locked aim makes
+    /// the shot dodgeable. Approach/aim speeds are per-body (tiers, boss);
+    /// only the shared bits live here.
     private let hunterPatrolSpeed: Double = 55
-    private let hunterApproachSpeed: Double = 200
     private let hunterApproachDuration: TimeInterval = 0.6
-    private let hunterAimDuration: TimeInterval = 0.5
-    /// Cumulative seconds of beam contact needed to burn through the armor.
-    private let hunterArmorSeconds: Double = 0.3
 
     private enum HunterMode {
         case patrol(direction: Vector2, until: TimeInterval)
@@ -102,8 +99,20 @@ final class GameScene: SKScene {
         case aim(target: Vector2, start: TimeInterval)
     }
     private var hunterModes: [BodyID: HunterMode] = [:]
-    private var hunterDamage: [BodyID: Double] = [:]
     private var hunterAimNodes: [BodyID: SKShapeNode] = [:]
+
+    /// Per-enemy tier attributes, assigned at spawn (see EnemyTiers/BossStats).
+    /// Shields are seconds-of-red-beam; damage accumulates as
+    /// frameDt × battery power and the enemy dies at shield ≤ damage.
+    private var shieldSeconds: [BodyID: Double] = [:]
+    private var enemyDamage: [BodyID: Double] = [:]
+    private var enemyBaseColors: [BodyID: (r: CGFloat, g: CGFloat, b: CGFloat)] = [:]
+    private var shooterAimDurations: [BodyID: Double] = [:]
+    private var hunterApproachSpeeds: [BodyID: Double] = [:]
+    private var hunterAimDurations: [BodyID: Double] = [:]
+    private var hunterPatrolSpeeds: [BodyID: Double] = [:]
+    private var enemyTierIndex: [BodyID: Int] = [:]
+    private var bossIDs: Set<BodyID> = []
 
     private let touchController = TouchController()
     private var fireButtonHeld = false
@@ -120,9 +129,11 @@ final class GameScene: SKScene {
     private var laserNode: SKShapeNode?
     private var sparkNode: SKShapeNode?
 
-    /// Laser battery: seconds of firing time (per-level capacity). Drains only
-    /// while the beam is actually rendering; an empty battery just means the
-    /// laser can't fire until a spare battery is collected.
+    /// Laser battery: the current type (fixed capacity/power per type — see
+    /// BatteryType) and remaining seconds of firing time. Drains only while
+    /// the beam is actually rendering; an empty battery just means the laser
+    /// can't fire until a spare battery is collected. Pickups overwrite both.
+    private var batteryType: BatteryType = .red
     private var laserCharge: Double = 0
     private var batteryHUDNode: SKNode?
     private var batteryFillBar: SKSpriteNode?
@@ -241,14 +252,23 @@ final class GameScene: SKScene {
         batteryFillBar = nil
         enemyDotsNode = nil
         lastEnemyDotCounts = (-1, -1, -1)
-        laserCharge = config.laserCapacity
+        batteryType = .red
+        laserCharge = BatteryType.red.capacity
         beamVisible = false
         shooterAimStart = [:]
         shooterAimNodes = [:]
         hunterModes = [:]
-        hunterDamage = [:]
         hunterAimNodes = [:]
-        batteryCarrierIDs = []
+        shieldSeconds = [:]
+        enemyDamage = [:]
+        enemyBaseColors = [:]
+        shooterAimDurations = [:]
+        hunterApproachSpeeds = [:]
+        hunterAimDurations = [:]
+        hunterPatrolSpeeds = [:]
+        enemyTierIndex = [:]
+        bossIDs = []
+        batteryCarriers = [:]
         batteryPickups = []
         gameStarted = true
         SoundManager.shared.startMusic()
@@ -264,7 +284,7 @@ final class GameScene: SKScene {
 
         let playerStart = mapSize * 0.5
         world.addPlayer(at: playerStart, radius: playerRadius)
-        world.runnerSpeed = config.runnerSpeed
+        world.runnerSpeed = EnemyTiers.runnerSpeed[0]
         var rng = SystemRandomNumberGenerator()
 
         // Mirrors first, then rocks, then enemies — each placement pass avoids
@@ -287,65 +307,111 @@ final class GameScene: SKScene {
         }
 
         // Shooters lurk right next to rocks (their cover), never near the
-        // player's spawn. The first `batteryDropCount` carry spare batteries.
+        // player's spawn. The first `shooterRedCarriers` carry Red batteries.
         let rocks = world.rockIDs.compactMap { world.body(withID: $0) }
-        var placedShooters = 0
-        var attempts = 0
-        while placedShooters < config.shooterCount, attempts < 300, let rock = rocks.randomElement(using: &rng) {
-            attempts += 1
-            let angle = Double.random(in: 0..<(2 * .pi), using: &rng)
-            let dist = rock.radius + npcRadius + Double.random(in: 4...26, using: &rng)
-            let candidate = rock.position + Vector2(cos(angle), sin(angle)) * dist
-            guard candidate.x > 20, candidate.x < mapSize.x - 20,
-                  candidate.y > 20, candidate.y < mapSize.y - 20,
-                  candidate.distance(to: playerStart) > config.shooterMinPlayerDistance,
-                  world.bodies.allSatisfy({ $0.position.distance(to: candidate) >= $0.radius + npcRadius + 6 })
-            else { continue }
-            let id = world.addShooter(at: candidate, radius: npcRadius)
-            // "Behind these obstacles": a shooter must start HIDDEN — reject
-            // spots with a clear line to the player's spawn.
-            if let pid = world.playerID, world.hasLineOfSight(from: id, to: pid) {
-                world.remove(bodyID: id)
-                continue
+        var shooterCarriersLeft = config.shooterRedCarriers
+        for (tier, count) in config.shooters.enumerated() {
+            var placed = 0
+            var attempts = 0
+            while placed < count, attempts < 300, let rock = rocks.randomElement(using: &rng) {
+                attempts += 1
+                let angle = Double.random(in: 0..<(2 * .pi), using: &rng)
+                let dist = rock.radius + npcRadius + Double.random(in: 4...26, using: &rng)
+                let candidate = rock.position + Vector2(cos(angle), sin(angle)) * dist
+                guard candidate.x > 20, candidate.x < mapSize.x - 20,
+                      candidate.y > 20, candidate.y < mapSize.y - 20,
+                      candidate.distance(to: playerStart) > config.shooterMinPlayerDistance,
+                      world.bodies.allSatisfy({ $0.position.distance(to: candidate) >= $0.radius + npcRadius + 6 })
+                else { continue }
+                let id = world.addShooter(at: candidate, radius: npcRadius)
+                // "Behind these obstacles": a shooter must start HIDDEN —
+                // reject spots with a clear line to the player's spawn.
+                if let pid = world.playerID, world.hasLineOfSight(from: id, to: pid) {
+                    world.remove(bodyID: id)
+                    continue
+                }
+                shooterAimDurations[id] = EnemyTiers.shooterAim[tier]
+                shieldSeconds[id] = EnemyTiers.shooterShield[tier]
+                enemyTierIndex[id] = tier
+                if shooterCarriersLeft > 0 {
+                    batteryCarriers[id] = .red
+                    shooterCarriersLeft -= 1
+                }
+                placed += 1
             }
-            if batteryCarrierIDs.count < config.batteryDropCount { batteryCarrierIDs.insert(id) }
-            placedShooters += 1
         }
 
-        var placedRunners = 0
-        attempts = 0
-        while placedRunners < config.runnerCount, attempts < 300 {
-            attempts += 1
-            guard let position = world.randomFreePosition(radius: npcRadius, using: &rng),
-                  position.distance(to: playerStart) > config.runnerMinPlayerDistance else { continue }
-            world.addRunner(at: position, radius: npcRadius)
-            placedRunners += 1
+        for (tier, count) in config.runners.enumerated() {
+            var placed = 0
+            var attempts = 0
+            while placed < count, attempts < 300 {
+                attempts += 1
+                guard let position = world.randomFreePosition(radius: npcRadius, using: &rng),
+                      position.distance(to: playerStart) > config.runnerMinPlayerDistance else { continue }
+                let id = world.addRunner(at: position, radius: npcRadius)
+                world.runnerSpeedOverrides[id] = EnemyTiers.runnerSpeed[tier]
+                shieldSeconds[id] = EnemyTiers.runnerShield[tier]
+                enemyTierIndex[id] = tier
+                placed += 1
+            }
         }
 
         // Hunters patrol from anywhere runner-distance away from the spawn.
-        var placedHunters = 0
-        attempts = 0
-        while placedHunters < config.hunterCount, attempts < 300 {
+        // The first `hunterOrangeCarriers` carry Orange batteries.
+        var hunterCarriersLeft = config.hunterOrangeCarriers
+        for (tier, count) in config.hunters.enumerated() {
+            var placed = 0
+            var attempts = 0
+            while placed < count, attempts < 300 {
+                attempts += 1
+                guard let position = world.randomFreePosition(radius: npcRadius, using: &rng),
+                      position.distance(to: playerStart) > config.runnerMinPlayerDistance else { continue }
+                let id = world.addHunter(at: position, radius: npcRadius)
+                hunterApproachSpeeds[id] = EnemyTiers.hunterApproach[tier]
+                hunterAimDurations[id] = EnemyTiers.hunterAim[tier]
+                shieldSeconds[id] = EnemyTiers.hunterShield[tier]
+                enemyTierIndex[id] = tier
+                if hunterCarriersLeft > 0 {
+                    batteryCarriers[id] = .orange
+                    hunterCarriersLeft -= 1
+                }
+                placed += 1
+            }
+        }
+
+        // The boss: an oversized, slow, heavily shielded hunter.
+        var placedBosses = 0
+        var attempts = 0
+        while placedBosses < config.bossCount, attempts < 300 {
             attempts += 1
-            guard let position = world.randomFreePosition(radius: npcRadius, using: &rng),
+            guard let position = world.randomFreePosition(radius: BossStats.radius, using: &rng),
                   position.distance(to: playerStart) > config.runnerMinPlayerDistance else { continue }
-            world.addHunter(at: position, radius: npcRadius)
-            placedHunters += 1
+            let id = world.addHunter(at: position, radius: BossStats.radius,
+                                     mass: BossStats.mass)
+            hunterPatrolSpeeds[id] = BossStats.patrolSpeed
+            hunterApproachSpeeds[id] = BossStats.approachSpeed
+            hunterAimDurations[id] = BossStats.aimDuration
+            shieldSeconds[id] = BossStats.shield
+            bossIDs.insert(id)
+            placedBosses += 1
         }
 
         self.world = world
         buildNodes(for: world)
 
-        // Scatter a couple of spare batteries for explorers (in addition to
-        // the ones shooters drop). Not right next to the spawn.
-        var placedSpares = 0
-        attempts = 0
-        while placedSpares < config.initialSpareBatteryCount, attempts < 200 {
-            attempts += 1
-            guard let position = world.randomFreePosition(radius: 12, using: &rng),
-                  position.distance(to: playerStart) > 150 else { continue }
-            spawnBatteryPickup(at: position)
-            placedSpares += 1
+        // Typed map spares, never right next to the spawn.
+        for (type, count) in [(BatteryType.red, config.redSpares),
+                              (.orange, config.orangeSpares),
+                              (.white, config.whiteSpares)] {
+            var placed = 0
+            var attempts = 0
+            while placed < count, attempts < 200 {
+                attempts += 1
+                guard let position = world.randomFreePosition(radius: 12, using: &rng),
+                      position.distance(to: playerStart) > 150 else { continue }
+                spawnBatteryPickup(at: position, type: type)
+                placed += 1
+            }
         }
     }
 
@@ -387,16 +453,20 @@ final class GameScene: SKScene {
         playerNode = player
 
         for body in world.bodies where body.kind.isHostile {
-            let fill: SKColor
+            let rgb: (r: CGFloat, g: CGFloat, b: CGFloat)
             switch body.kind {
             case .runner:
-                fill = SKColor(red: 0.75, green: 0.42, blue: 1, alpha: 1)  // purple: chases
+                rgb = (0.75, 0.42, 1)     // purple: chases
             case .hunter:
-                fill = SKColor(red: 1, green: 0.62, blue: 0.15, alpha: 1)  // orange: patrols+shoots
+                rgb = bossIDs.contains(body.id)
+                    ? (0.95, 0.3, 0.1)    // deep red-orange: the boss
+                    : (1, 0.62, 0.15)     // orange: patrols+shoots
             default:
-                fill = SKColor(red: 1, green: 0.45, blue: 0.35, alpha: 1)  // red: shoots
+                rgb = (1, 0.45, 0.35)     // red: shoots
             }
-            let node = makeCircleNode(radius: body.radius, fill: fill)
+            enemyBaseColors[body.id] = rgb
+            let node = makeCircleNode(radius: body.radius,
+                                      fill: SKColor(red: rgb.r, green: rgb.g, blue: rgb.b, alpha: 1))
             node.zPosition = 0
             // Facing line: shows where the enemy aims (shooter) or runs (runner).
             let facingPath = CGMutablePath()
@@ -406,6 +476,14 @@ final class GameScene: SKScene {
             facingLine.strokeColor = SKColor(white: 1, alpha: 0.7)
             facingLine.lineWidth = 1.5
             node.addChild(facingLine)
+            // Tier pips: tier II gets one dot, tier III two (tier I none).
+            for pip in 0..<(enemyTierIndex[body.id] ?? 0) {
+                let dot = SKShapeNode(circleOfRadius: 2)
+                dot.fillColor = .white
+                dot.strokeColor = .clear
+                dot.position = CGPoint(x: -3.5 + CGFloat(pip) * 7, y: -body.radius * 0.45)
+                node.addChild(dot)
+            }
             addChild(node)
             npcNodes[body.id] = node
         }
@@ -561,7 +639,8 @@ final class GameScene: SKScene {
         enemyDotsNode.removeAllChildren()
         let total = shooters + hunters + runners
         guard total > 0 else { return }
-        let spacing: CGFloat = 12
+        // Late levels field 30+ enemies; tighten the row so it stays on screen.
+        let spacing: CGFloat = total > 24 ? 7 : 12
         var x = -CGFloat(total - 1) * spacing / 2
         for index in 0..<total {
             let dot = SKShapeNode(circleOfRadius: 3.5)
@@ -578,13 +657,10 @@ final class GameScene: SKScene {
     }
 
     private func updateBatteryHUD() {
-        let fraction = CGFloat(laserCharge / config.laserCapacity)
+        // The bar's color IS the battery type; its width shows the charge.
+        let fraction = CGFloat(laserCharge / batteryType.capacity)
         batteryFillBar?.size = CGSize(width: 22 * max(0, fraction), height: 9)
-        batteryFillBar?.color = fraction > 0.55
-            ? SKColor(red: 0.3, green: 0.85, blue: 0.35, alpha: 1)   // green: full-ish
-            : fraction > 0.25
-                ? SKColor(red: 1, green: 0.8, blue: 0.2, alpha: 1)   // yellow: mid
-                : SKColor(red: 1, green: 0.3, blue: 0.3, alpha: 1)   // red: running low
+        batteryFillBar?.color = batteryColor(batteryType)
     }
 
     /// The pulsing yellow impact spark; used persistently at the beam's
@@ -887,51 +963,81 @@ final class GameScene: SKScene {
         // aim line the joystick steers) — firing has no direction of its own.
         let facing = playerNode.map { Vector2(cos(Double($0.zRotation)), sin(Double($0.zRotation))) }
         guard laserCharge > 0, firingRequested, let facing,
-              let player = world.playerID.flatMap({ world.body(withID: $0) }),
-              let beam = world.castLaserPath(through: castThrough ?? (player.position + facing * 100)),
-              let endPoint = beam.points.last, beam.points.count >= 2 else {
+              let player = world.playerID.flatMap({ world.body(withID: $0) }) else {
             fadeOutBeamIfNeeded()
             return
+        }
+        let aimPoint = castThrough ?? (player.position + facing * 100)
+
+        let points: [Vector2]
+        if batteryType.piercing {
+            // White: a straight ray through everything; damages every
+            // hostile it crosses. No reflections, so no self-hit.
+            guard let beam = world.castPiercingBeam(through: aimPoint),
+                  beam.points.count >= 2 else {
+                fadeOutBeamIfNeeded()
+                return
+            }
+            points = beam.points
+            for id in beam.bodyIDs
+            where world.body(withID: id)?.kind.isHostile == true {
+                applyLaserDamage(to: id, world: world)
+            }
+        } else {
+            guard let beam = world.castLaserPath(through: aimPoint),
+                  let endPoint = beam.points.last, beam.points.count >= 2 else {
+                fadeOutBeamIfNeeded()
+                return
+            }
+            points = beam.points
+            if let victimID = beam.bodyID {
+                if victimID == world.playerID {
+                    // A reflected beam looped back into the player: self-hit.
+                    killPlayer()
+                } else if world.body(withID: victimID)?.kind.isHostile == true {
+                    applyLaserDamage(to: victimID, world: world, hitPoint: endPoint)
+                }
+                // Rocks just absorb the beam.
+            }
         }
 
         // Polyline through every bounce point to the final hit / bounds exit.
         let path = CGMutablePath()
-        path.move(to: CGPoint(x: beam.points[0].x, y: beam.points[0].y))
-        for point in beam.points.dropFirst() {
+        path.move(to: CGPoint(x: points[0].x, y: points[0].y))
+        for point in points.dropFirst() {
             path.addLine(to: CGPoint(x: point.x, y: point.y))
         }
         laserNode?.path = path
-        sparkNode?.position = CGPoint(x: endPoint.x, y: endPoint.y)
-        showBeamNodes()
-
-        if let victimID = beam.bodyID {
-            if victimID == world.playerID {
-                // A reflected beam looped back into the player: self-hit.
-                killPlayer()
-            } else if let victim = world.body(withID: victimID), victim.kind.isHostile {
-                if victim.kind == .hunter {
-                    // Armor: needs cumulative beam contact; heats up visibly.
-                    let damage = (hunterDamage[victimID] ?? 0) + frameDt
-                    hunterDamage[victimID] = damage
-                    if damage >= hunterArmorSeconds {
-                        kill(npcID: victimID, at: endPoint)
-                    } else if let node = npcNodes[victimID] {
-                        let f = CGFloat(damage / hunterArmorSeconds)
-                        node.fillColor = SKColor(red: 1, green: 0.62 + 0.33 * f,
-                                                 blue: 0.15 + 0.7 * f, alpha: 1)
-                    }
-                } else {
-                    kill(npcID: victimID, at: endPoint)
-                }
-            }
-            // Rocks just absorb the beam.
+        if let endPoint = points.last {
+            sparkNode?.position = CGPoint(x: endPoint.x, y: endPoint.y)
         }
+        showBeamNodes()
 
         // The beam rendered this frame, so it drains the battery. This runs
         // after the kill so a last-kill-on-last-drop tie counts as a win.
         // An empty battery is NOT game over: the laser just can't fire until
-        // the player collects a dropped spare battery.
+        // the player collects a spare battery.
         laserCharge = max(0, laserCharge - frameDt)
+    }
+
+    /// Shield damage from the player's beam this frame (damage accumulates as
+    /// beam-seconds × battery power); kills once it passes the shield, and
+    /// heats the body toward white as the shield burns.
+    private func applyLaserDamage(to victimID: BodyID, world: World,
+                                  hitPoint: Vector2? = nil) {
+        let shield = shieldSeconds[victimID] ?? 0
+        let damage = (enemyDamage[victimID] ?? 0) + frameDt * batteryType.power
+        enemyDamage[victimID] = damage
+        if damage >= shield {
+            let position = hitPoint ?? world.body(withID: victimID)?.position
+            if let position { kill(npcID: victimID, at: position) }
+        } else if shield > 0, let node = npcNodes[victimID],
+                  let base = enemyBaseColors[victimID] {
+            let f = CGFloat(min(1, damage / shield))
+            node.fillColor = SKColor(red: base.r + (1 - base.r) * f,
+                                     green: base.g + (1 - base.g) * f,
+                                     blue: base.b + (1 - base.b) * f, alpha: 1)
+        }
     }
 
     // MARK: - Camera
@@ -998,7 +1104,7 @@ final class GameScene: SKScene {
             aimNode?.path = path
             aimNode?.isHidden = false
 
-            if currentTime - start >= config.telegraphDuration {
+            if currentTime - start >= (shooterAimDurations[body.id] ?? EnemyTiers.shooterAim[0]) {
                 fireShooterBeam(from: body.position, to: player.position)
                 killPlayer()
                 return
@@ -1064,7 +1170,8 @@ final class GameScene: SKScene {
                     direction = Vector2(cos(angle), sin(angle))
                     until = currentTime + Double.random(in: 1.5...3.5)
                 }
-                world.setVelocity(direction * hunterPatrolSpeed, forBodyID: id)
+                world.setVelocity(direction * (hunterPatrolSpeeds[id] ?? hunterPatrolSpeed),
+                                  forBodyID: id)
                 mode = .patrol(direction: direction, until: until)
                 hunterAimNodes[id]?.isHidden = true
 
@@ -1077,8 +1184,9 @@ final class GameScene: SKScene {
                     world.setVelocity(.zero, forBodyID: id)
                 } else {
                     let toPlayer = player.position - body.position
+                    let speed = hunterApproachSpeeds[id] ?? EnemyTiers.hunterApproach[0]
                     world.setVelocity(toPlayer.length > 1
-                                      ? toPlayer.normalized * hunterApproachSpeed
+                                      ? toPlayer.normalized * speed
                                       : .zero, forBodyID: id)
                 }
                 hunterAimNodes[id]?.isHidden = true
@@ -1099,7 +1207,7 @@ final class GameScene: SKScene {
                     aim.path = path
                     aim.isHidden = false
                 }
-                if currentTime - start >= hunterAimDuration {
+                if currentTime - start >= (hunterAimDurations[id] ?? EnemyTiers.hunterAim[0]) {
                     hunterAimNodes[id]?.isHidden = true
                     fireHunterShot(from: body, lockedTarget: target, world: world)
                     guard gameStarted else { return } // the shot connected
@@ -1165,9 +1273,18 @@ final class GameScene: SKScene {
 
     // MARK: - Battery pickups
 
-    private func spawnBatteryPickup(at position: Vector2) {
+    /// The on-screen color of each battery type (pickup body, HUD bar, beam).
+    private func batteryColor(_ type: BatteryType) -> SKColor {
+        switch type {
+        case .red: return SKColor(red: 1, green: 0.25, blue: 0.3, alpha: 1)
+        case .orange: return SKColor(red: 1, green: 0.62, blue: 0.15, alpha: 1)
+        case .white: return .white
+        }
+    }
+
+    private func spawnBatteryPickup(at position: Vector2, type: BatteryType) {
         let node = SKShapeNode(rectOf: CGSize(width: 12, height: 18), cornerRadius: 3)
-        node.fillColor = SKColor(red: 0.25, green: 0.9, blue: 0.4, alpha: 0.95)
+        node.fillColor = batteryColor(type)
         node.strokeColor = .white
         node.lineWidth = 1
         node.glowWidth = 3
@@ -1178,7 +1295,7 @@ final class GameScene: SKScene {
             .scale(to: 0.9, duration: 0.4),
         ])))
         addChild(node)
-        batteryPickups.append((node.position, node))
+        batteryPickups.append((node.position, node, type))
     }
 
     private func checkBatteryPickups() {
@@ -1187,7 +1304,11 @@ final class GameScene: SKScene {
         batteryPickups.removeAll { pickup in
             let distance = player.position.distance(to: Vector2(pickup.position.x, pickup.position.y))
             guard distance <= player.radius + 14 else { return false }
-            laserCharge = config.laserCapacity // full recharge
+            // The pickup overwrites both the type and the remaining charge —
+            // grabbing a Red while holding a half-full White is a downgrade.
+            batteryType = pickup.type
+            laserCharge = pickup.type.capacity
+            laserNode?.strokeColor = batteryColor(pickup.type)
             pickup.node.run(.sequence([
                 .group([
                     .scale(to: 1.8, duration: 0.2),
@@ -1259,15 +1380,23 @@ final class GameScene: SKScene {
         addChild(burst)
         burst.run(.sequence([.fadeOut(withDuration: 0.25), .removeFromParent()]))
 
-        // Battery carriers leave a spare battery where they fell.
-        if batteryCarrierIDs.remove(npcID) != nil, let dropPosition {
-            spawnBatteryPickup(at: dropPosition)
+        // Battery carriers leave their battery where they fell.
+        if let type = batteryCarriers.removeValue(forKey: npcID), let dropPosition {
+            spawnBatteryPickup(at: dropPosition, type: type)
         }
         shooterAimStart[npcID] = nil
         shooterAimNodes.removeValue(forKey: npcID)?.removeFromParent()
         hunterModes[npcID] = nil
-        hunterDamage[npcID] = nil
         hunterAimNodes.removeValue(forKey: npcID)?.removeFromParent()
+        shieldSeconds[npcID] = nil
+        enemyDamage[npcID] = nil
+        enemyBaseColors[npcID] = nil
+        enemyTierIndex[npcID] = nil
+        shooterAimDurations[npcID] = nil
+        hunterApproachSpeeds[npcID] = nil
+        hunterAimDurations[npcID] = nil
+        hunterPatrolSpeeds[npcID] = nil
+        bossIDs.remove(npcID)
 
         if let node = npcNodes.removeValue(forKey: npcID) {
             node.run(.sequence([

@@ -7,14 +7,15 @@ pure-Swift custom physics/raycast engine. Rebuilt from scratch in 2026 from a
 ## Repo layout
 
 - `Packages/GameEngine/` — pure Swift engine package, ZERO UIKit/SpriteKit
-  imports, fully unit-tested (70 tests). Vector2 (SIMD2<Double> typealias),
+  imports, fully unit-tested (82 tests). Vector2 (SIMD2<Double> typealias),
   CircleBody (player/npc/rock/shooter/runner kinds), World (fixed-timestep
   update, circle & segment collisions, laser raycast with mirror reflection,
   line-of-sight), Rect, Laser.swift (LaserHit/Mirror/LaserPath + castLaserPath).
 - `App/` — app layer. `GameScene.swift` (~900 lines: world building, camera,
-  input, all gameplay systems, HUD, effects), `Levels.swift` (LevelConfig:
-  20 levels interpolated from 10 anchor rows; anchor 7 ≈ level 14 = the
-  original single-map game), `iBondApp.swift`
+  input, all gameplay systems, HUD, effects), `Levels.swift` (BatteryType
+  red/orange/white with fixed capacity+power, EnemyTiers I–III, BossStats,
+  and LevelConfig: an explicit 50-row level table, boss every 10th level;
+  level 0 = dev hunter test), `iBondApp.swift`
   (SwiftUI shell + menu/playing/finished/gameOver overlay state machine, level
   progression persisted via @AppStorage "currentLevel"), `TouchController.swift`
   (touch role assignment by start zone), `SoundManager.swift` + `Sounds/*.wav`
@@ -28,7 +29,7 @@ pure-Swift custom physics/raycast engine. Rebuilt from scratch in 2026 from a
 
 ```bash
 xcodegen                                     # regenerate iBond.xcodeproj (after project.yml changes / fresh clone)
-swift test --package-path Packages/GameEngine  # engine tests (no simulator needed) — expect 70 passing
+swift test --package-path Packages/GameEngine  # engine tests (no simulator needed) — expect 82 passing
 xcodebuild -project iBond.xcodeproj -scheme iBond \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
   -derivedDataPath DerivedData build         # simulator build
@@ -101,9 +102,11 @@ xcrun devicectl device process launch --device C3A2910A-B2BA-57B7-9A72-A21E30126
 - `playerControlVelocity` (joystick) overrides `moveTarget` (legacy tap-to-move,
   engine-only now, still tested).
 - Game rules and non-level tuning constants: top of `GameScene.swift`.
-  Per-level tuning (map scale, enemy/obstacle/battery counts, spawn distances):
-  `App/Levels.swift`. Death retries the same level; finishing level 10 wraps to
-  level 1. Current-state design doc:
+  Per-level composition (map scale, per-tier enemy counts, obstacles, typed
+  battery spares/carriers) plus tier/battery/boss stats: `App/Levels.swift`.
+  Kill model: shield seconds ÷ battery power; white pierces everything.
+  Death retries the same level; finishing level 50 wraps to level 1.
+  Design docs: `2026-08-09-tiers-batteries-bosses-plan.md` and
   `docs/superpowers/specs/2026-08-08-laser-taser-current-state.md`.
 
 ## Known seams / deferred work

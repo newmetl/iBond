@@ -131,3 +131,30 @@ final class BodyOriginLaserTests: XCTestCase {
         XCTAssertEqual(path?.bodyID, npc)
     }
 }
+
+// MARK: - Piercing beam (white battery)
+
+final class PiercingBeamTests: XCTestCase {
+    func testPiercingBeamCrossesRocksMirrorsAndBodiesToBoundsExit() {
+        let world = World(size: Vector2(800, 600))
+        world.addPlayer(at: Vector2(100, 300))
+        let near = world.addNPC(at: Vector2(300, 300))
+        let rock = world.addRock(at: Vector2(400, 300), radius: 40)
+        world.addMirror(from: Vector2(500, 200), to: Vector2(500, 400))
+        let far = world.addNPC(at: Vector2(700, 300))
+        let offLine = world.addNPC(at: Vector2(300, 500))
+        let beam = world.castPiercingBeam(through: Vector2(200, 300))
+        XCTAssertEqual(beam?.points.first, Vector2(100, 300))
+        XCTAssertEqual(beam?.points.last, Vector2(800, 300)) // bounds exit
+        XCTAssertEqual(beam?.bodyIDs, [near, rock, far]) // nearest first
+        XCTAssertEqual(beam?.bodyIDs.contains(offLine), false)
+    }
+
+    func testPiercingBeamExcludesPlayerAndNeedsAim() {
+        let world = World(size: Vector2(800, 600))
+        world.addPlayer(at: Vector2(100, 300))
+        let beam = world.castPiercingBeam(through: Vector2(200, 300))
+        XCTAssertEqual(beam?.bodyIDs.contains(world.playerID!), false)
+        XCTAssertNil(world.castPiercingBeam(through: Vector2(100, 300)))
+    }
+}

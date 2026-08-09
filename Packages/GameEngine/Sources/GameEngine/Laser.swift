@@ -24,6 +24,15 @@ public struct LaserPath: Equatable {
     public let bodyID: BodyID?
 }
 
+/// A piercing (white-battery) beam: a straight segment from the player to the
+/// bounds exit that ignores rocks and mirrors. `bodyIDs` lists every body the
+/// segment crosses (player excluded), nearest first — the app decides what
+/// counts as a target.
+public struct PiercingBeam: Equatable {
+    public let points: [Vector2]
+    public let bodyIDs: [BodyID]
+}
+
 public extension World {
     /// Reflections stop after this many bounces (guards mirror "traps").
     static let maxLaserBounces = 5
@@ -95,6 +104,31 @@ public extension World {
             points.append(boundsExit(origin: origin, direction: direction))
             return LaserPath(points: points, bodyID: nil)
         }
+    }
+
+    /// Casts the white battery's beam: a straight ray from the player through
+    /// `aim` to the bounds exit, passing through everything. Returns every
+    /// body crossed (nearest first, player excluded). Nil when there is no
+    /// player or `aim` is the player's center.
+    func castPiercingBeam(through aim: Vector2) -> PiercingBeam? {
+        guard let pid = playerID, let player = body(withID: pid) else { return nil }
+        let origin = player.position
+        let toAim = aim - origin
+        guard toAim.length > .ulpOfOne else { return nil }
+        let direction = toAim.normalized
+        let exit = boundsExit(origin: origin, direction: direction)
+        let maxT = (exit - origin).length
+
+        var crossed: [(t: Double, id: BodyID)] = []
+        for body in bodies where body.id != pid {
+            if let t = Self.rayCircleIntersection(origin: origin, direction: direction,
+                                                  center: body.position, radius: body.radius),
+               t <= maxT {
+                crossed.append((t, body.id))
+            }
+        }
+        crossed.sort { $0.t < $1.t }
+        return PiercingBeam(points: [origin, exit], bodyIDs: crossed.map(\.id))
     }
 
     /// True when `viewer` can see `target` along a straight line — nothing

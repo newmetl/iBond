@@ -1,7 +1,7 @@
 # Tiered enemies, typed batteries, bosses — level plan
 
 Date: 2026-08-09
-Status: PROPOSAL — awaiting Wojtek's approval; nothing implemented yet.
+Status: approved by Wojtek (white pierces everything) and implemented 2026-08-09.
 
 ## Core mechanic change
 

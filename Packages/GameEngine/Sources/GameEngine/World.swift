@@ -17,6 +17,8 @@ public final class World {
     public var npcDamping: Double = 4
     /// Runner chase speed in points per second (~53% of the default playerSpeed).
     public var runnerSpeed: Double = 170
+    /// Per-runner speed overrides (enemy tiers); falls back to `runnerSpeed`.
+    public var runnerSpeedOverrides: [BodyID: Double] = [:]
 
     private var nextID: BodyID = 0
 
@@ -205,7 +207,8 @@ public final class World {
                 continue
             }
             let toPlayer = target - bodies[i].position
-            bodies[i].velocity = toPlayer.length > 1 ? toPlayer.normalized * runnerSpeed : .zero
+            let speed = runnerSpeedOverrides[bodies[i].id] ?? runnerSpeed
+            bodies[i].velocity = toPlayer.length > 1 ? toPlayer.normalized * speed : .zero
         }
     }
 
