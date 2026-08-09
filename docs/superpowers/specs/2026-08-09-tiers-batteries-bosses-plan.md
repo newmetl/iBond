@@ -50,15 +50,18 @@ shooters aim ~40% slower than their tier; huge hunters approach at ~50%.
 
 - Runners never drop. Shooters carry Red (1 from L12, 2 from L15, 3 from
   L51). Hunters carry Orange (1 from L23, 2 from L41, 3 from L71).
-- Orange debuts in the L10 boss arena; regular-map Orange spares from L21.
-- White is boss-arena-only, first at L30 (1), 2 from L60, 3 at L90, 4 at
-  L100.
-- Red map spares taper: 1 from L4, 2 from L7, 1 from L31, 0 from L61.
+- Each early boss introduces a battery type (Wojtek 2026-08-10): RED
+  pickups first appear in the L10 arena (6 spares, red-only), ORANGE in
+  the L20 arena, WHITE in the L30 arena. Levels 1–9 have no pickups at
+  all — the full Red you start with is the whole budget.
+- Regular-map Red spares: 1 from L11, 2 from L15, 1 from L31, 0 from L61.
+- Regular-map Orange spares from L21. White stays boss-arena-only:
+  1 at L30–L50, 2 from L60, 3 at L90, 4 at L100.
 
 ## Introduction milestones
 
-R1 @1 · rocks @3 · Red spares @4 · mirrors @6 · **bR1 + Orange @10** ·
-S1 @11 · Red carriers @12 · **bS1 @20** · H1 @21 · Orange carriers @23 ·
+R1 @1 · rocks @3 · Red spares @4 · mirrors @6 · **bR1 + Red pickups @10** ·
+S1 @11 · Red carriers @12 · **bS1 + Orange @20** · H1 @21 · Orange carriers @23 ·
 **bH1 + White @30** · R2 @31 · **bR2 @40** · S2 @41 · **bS2 @50** ·
 H2 @51 · **bH2 @60** · R3 @61 · **bR3 @70** · S3 @71 · **bS3 @80** ·
 H3 @81 · **bH3 @90** · everything @91 · **triple finale @100**.
@@ -73,17 +76,17 @@ individual rows stay hand-tunable once in Levels.swift).
 | 1 | 1.0 | 2 | – | – | – | – | – | – | – | – | - | – | – | – | – | – | – | – |
 | 2 | 1.0 | 3 | – | – | – | – | – | – | – | – | - | – | – | – | – | – | – | – |
 | 3 | 1.0 | 4 | – | – | – | – | – | – | – | – | - | 3 | – | – | – | – | – | – |
-| 4 | 1.0 | 5 | – | – | – | – | – | – | – | – | - | 3 | – | 1 | – | – | – | – |
-| 5 | 1.0 | 6 | – | – | – | – | – | – | – | – | - | 3 | – | 1 | – | – | – | – |
-| 6 | 1.5 | 7 | – | – | – | – | – | – | – | – | - | 3 | 1 | 1 | – | – | – | – |
-| 7 | 1.5 | 8 | – | – | – | – | – | – | – | – | - | 4 | 1 | 2 | – | – | – | – |
-| 8 | 1.5 | 9 | – | – | – | – | – | – | – | – | - | 4 | 1 | 2 | – | – | – | – |
-| 9 | 1.5 | 10 | – | – | – | – | – | – | – | – | - | 4 | 1 | 2 | – | – | – | – |
-| 10 | 2.0 | 4 | – | – | – | – | – | – | – | – | bR1 | 6 | 3 | 1 | 3 | – | – | – |
-| 11 | 1.5 | 5 | – | – | 1 | – | – | – | – | – | - | 5 | 2 | 2 | – | – | – | – |
-| 12 | 1.5 | 5 | – | – | 1 | – | – | – | – | – | - | 5 | 2 | 2 | – | – | 1 | – |
-| 13 | 1.5 | 5 | – | – | 2 | – | – | – | – | – | - | 5 | 2 | 2 | – | – | 1 | – |
-| 14 | 1.5 | 6 | – | – | 2 | – | – | – | – | – | - | 5 | 2 | 2 | – | – | 1 | – |
+| 4 | 1.0 | 5 | – | – | – | – | – | – | – | – | - | 3 | – | – | – | – | – | – |
+| 5 | 1.0 | 6 | – | – | – | – | – | – | – | – | - | 3 | – | – | – | – | – | – |
+| 6 | 1.5 | 7 | – | – | – | – | – | – | – | – | - | 3 | 1 | – | – | – | – | – |
+| 7 | 1.5 | 8 | – | – | – | – | – | – | – | – | - | 4 | 1 | – | – | – | – | – |
+| 8 | 1.5 | 9 | – | – | – | – | – | – | – | – | - | 4 | 1 | – | – | – | – | – |
+| 9 | 1.5 | 10 | – | – | – | – | – | – | – | – | - | 4 | 1 | – | – | – | – | – |
+| 10 | 2.0 | 4 | – | – | – | – | – | – | – | – | bR1 | 6 | 3 | 6 | – | – | – | – |
+| 11 | 1.5 | 5 | – | – | 1 | – | – | – | – | – | - | 5 | 2 | 1 | – | – | – | – |
+| 12 | 1.5 | 5 | – | – | 1 | – | – | – | – | – | - | 5 | 2 | 1 | – | – | 1 | – |
+| 13 | 1.5 | 5 | – | – | 2 | – | – | – | – | – | - | 5 | 2 | 1 | – | – | 1 | – |
+| 14 | 1.5 | 6 | – | – | 2 | – | – | – | – | – | - | 5 | 2 | 1 | – | – | 1 | – |
 | 15 | 1.5 | 6 | – | – | 3 | – | – | – | – | – | - | 6 | 2 | 2 | – | – | 2 | – |
 | 16 | 2.0 | 6 | – | – | 3 | – | – | – | – | – | - | 6 | 3 | 2 | – | – | 2 | – |
 | 17 | 2.0 | 7 | – | – | 4 | – | – | – | – | – | - | 6 | 3 | 2 | – | – | 2 | – |
