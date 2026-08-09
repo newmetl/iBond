@@ -113,6 +113,10 @@ final class GameScene: SKScene {
     private var hunterPatrolSpeeds: [BodyID: Double] = [:]
     private var enemyTierIndex: [BodyID: Int] = [:]
     private var bossIDs: Set<BodyID> = []
+    /// Enemies the player has had on screen at least once (one-way, like
+    /// runner activation). Only seen enemies can be damaged — blind-firing
+    /// across the map must not farm kills.
+    private var seenEnemyIDs: Set<BodyID> = []
 
     private let touchController = TouchController()
     private var fireButtonHeld = false
@@ -188,7 +192,7 @@ final class GameScene: SKScene {
 
         syncNodes()
         updateCamera()
-        activateVisibleRunners()
+        registerVisibleEnemies()
         processLaser()
         processShooters(currentTime)
         processHunters(currentTime)
@@ -213,15 +217,19 @@ final class GameScene: SKScene {
         sound.setRunnersChasing(chasing)
     }
 
-    /// Runners wait in ambush until they first scroll into view, then chase
-    /// forever — without this, every runner would converge on spawn.
-    private func activateVisibleRunners() {
+    /// One sweep over the hostiles currently on screen: marks them as seen
+    /// (only seen enemies are damageable) and activates runners. Runners wait
+    /// in ambush until they first scroll into view, then chase forever —
+    /// without that, every runner would converge on spawn.
+    private func registerVisibleEnemies() {
         guard gameStarted, let world else { return }
         for body in world.bodies
-        where body.kind == .runner
-            && !world.activeRunnerIDs.contains(body.id)
+        where body.kind.isHostile
             && isOnScreen(position: body.position, radius: body.radius) {
-            world.activateRunner(body.id)
+            seenEnemyIDs.insert(body.id)
+            if body.kind == .runner, !world.activeRunnerIDs.contains(body.id) {
+                world.activateRunner(body.id)
+            }
         }
     }
 
@@ -268,6 +276,7 @@ final class GameScene: SKScene {
         hunterPatrolSpeeds = [:]
         enemyTierIndex = [:]
         bossIDs = []
+        seenEnemyIDs = []
         batteryCarriers = [:]
         batteryPickups = []
         gameStarted = true
@@ -1043,6 +1052,9 @@ final class GameScene: SKScene {
     /// heats the body toward white as the shield burns.
     private func applyLaserDamage(to victimID: BodyID, world: World,
                                   hitPoint: Vector2? = nil) {
+        // Never-seen enemies just absorb the beam like a rock — blind-firing
+        // across the map must not kill things the player hasn't met.
+        guard seenEnemyIDs.contains(victimID) else { return }
         let shield = shieldSeconds[victimID] ?? 0
         let damage = (enemyDamage[victimID] ?? 0) + frameDt * batteryType.power
         enemyDamage[victimID] = damage
