@@ -23,7 +23,7 @@ enum BatteryType: Int, CaseIterable {
 enum EnemyTiers {
     static let runnerSpeed = [130.0, 170.0, 210.0]
     static let runnerShield = [0.0, 0.5, 1.2]
-    static let shooterAim = [2.2, 1.6, 1.1]
+    static let shooterAim = [1.5, 1.1, 0.8]
     static let shooterShield = [0.0, 0.6, 1.4]
     static let hunterApproach = [190.0, 210.0, 230.0]
     static let hunterAim = [0.6, 0.5, 0.4]

@@ -16,7 +16,7 @@ Runners, hunters, and all bosses kill on touch.
 | | Tier I | Tier II | Tier III |
 |---|---|---|---|
 | Runner speed / shield | 130 / 0 | 170 / 0.5s | 210 / 1.2s |
-| Shooter aim / shield | 2.2s / 0 | 1.6s / 0.6s | 1.1s / 1.4s |
+| Shooter aim / shield | 1.5s / 0 | 1.1s / 0.6s | 0.8s / 1.4s |
 | Hunter approach / aim / shield | 190 / 0.6s / **0** | 210 / 0.5s / 1.0s | 230 / 0.4s / 2.2s |
 
 H1 is now instantly killable (Wojtek 2026-08-10); protection scales per
@@ -33,13 +33,13 @@ huge runners chase (touch kill), huge shooters ambush, huge hunters patrol
 | Lvl | Boss | Shield | Speed / aim |
 |-----|------|--------|-------------|
 | 10 | huge R1 | 14s | chase 72 |
-| 20 | huge S1 | 16s | aim 3.1s |
+| 20 | huge S1 | 16s | aim 2.1s |
 | 30 | huge H1 (Warden) | 18s | patrol 35, approach 95, aim 0.8s |
 | 40 | huge R2 | 20s | chase 94 |
-| 50 | huge S2 | 22s | aim 2.2s |
+| 50 | huge S2 | 22s | aim 1.5s |
 | 60 | huge H2 | 24s | patrol 35, approach 105, aim 0.65s |
 | 70 | huge R3 | 26s | chase 116 |
-| 80 | huge S3 | 28s | aim 1.5s |
+| 80 | huge S3 | 28s | aim 1.1s |
 | 90 | huge H3 | 30s | patrol 35, approach 115, aim 0.5s |
 | 100 | huge R3 + huge S3 + huge H3 | 18s each | finale placeholder |
 
