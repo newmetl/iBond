@@ -33,18 +33,18 @@ huge runners chase (touch kill), huge shooters ambush, huge hunters patrol
 | Lvl | Boss | Shield | Speed / aim |
 |-----|------|--------|-------------|
 | 10 | huge R1 | 14s | chase 72 |
-| 20 | huge S1 | 16s | aim 0.7s |
+| 20 | huge S1 | 16s | aim 1.4s |
 | 30 | huge H1 (Warden) | 18s | patrol 35, approach 95, aim 0.8s |
 | 40 | huge R2 | 20s | chase 94 |
-| 50 | huge S2 | 22s | aim 0.5s |
+| 50 | huge S2 | 22s | aim 1.0s |
 | 60 | huge H2 | 24s | patrol 35, approach 105, aim 0.65s |
 | 70 | huge R3 | 26s | chase 116 |
-| 80 | huge S3 | 28s | aim 0.4s |
+| 80 | huge S3 | 28s | aim 0.75s |
 | 90 | huge H3 | 30s | patrol 35, approach 115, aim 0.5s |
 | 100 | huge R3 + huge S3 + huge H3 | 18s each | finale placeholder |
 
 Rule of thumb: huge runners chase at ~55% of their tier's speed; huge
-shooters snap-aim at ~half their tier's time; huge hunters approach at ~50%.
+shooters aim slightly faster than their tier; huge hunters approach at ~50%.
 
 ## Battery sourcing
 
