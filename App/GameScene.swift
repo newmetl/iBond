@@ -597,7 +597,11 @@ final class GameScene: SKScene {
                 // velocity can't be trusted for facing. processLaser() runs
                 // after this and overrides with the firing direction while the
                 // laser is held; when idle, the last direction persists.
-                if let last = lastPlayerPosition {
+                // While tap-firing, the aim is locked to the finger
+                // (processLaser owns the rotation) — movement must not
+                // fight it.
+                let aimLocked = controlScheme != .joystick && firingRequested
+                if !aimLocked, let last = lastPlayerPosition {
                     let dx = position.x - last.x
                     let dy = position.y - last.y
                     if dx * dx + dy * dy > 0.01 {
@@ -800,21 +804,30 @@ final class GameScene: SKScene {
 
     private func processLaser() {
         guard let world else { return }
-        // Tap-fire schemes: steer the aim toward the finger every frame (the
-        // fire tap snapped it initially; this tracks drags smoothly and
-        // overrides the movement-derived facing while firing).
+        // Tap-fire schemes: the beam must pass exactly through the finger,
+        // even while running. Re-read the touch's location every frame (a
+        // stationary finger produces no move events, but the camera scrolls
+        // under it, so its scene position changes), face it directly with no
+        // smoothing (the finger itself moves smoothly), and cast through the
+        // actual finger point instead of a facing-derived ray. Movement-based
+        // facing is suppressed in syncNodes while firing.
+        var castThrough: Vector2?
         if controlScheme != .joystick, firingRequested,
            let player = world.playerID.flatMap({ world.body(withID: $0) }) {
-            let dx = fireTarget.x - CGFloat(player.position.x)
-            let dy = fireTarget.y - CGFloat(player.position.y)
-            if dx * dx + dy * dy > 1 { rotatePlayer(toward: atan2(dy, dx)) }
+            if let fireTouch { fireTarget = fireTouch.location(in: self) }
+            let dx = Double(fireTarget.x) - player.position.x
+            let dy = Double(fireTarget.y) - player.position.y
+            if dx * dx + dy * dy > 1 {
+                playerNode?.zRotation = CGFloat(atan2(dy, dx))
+                castThrough = Vector2(Double(fireTarget.x), Double(fireTarget.y))
+            }
         }
-        // The beam fires along the player's current facing (the aim line the
-        // joystick or finger steers) — firing has no direction of its own.
+        // Otherwise the beam fires along the player's current facing (the
+        // aim line the joystick steers) — firing has no direction of its own.
         let facing = playerNode.map { Vector2(cos(Double($0.zRotation)), sin(Double($0.zRotation))) }
         guard laserCharge > 0, firingRequested, let facing,
               let player = world.playerID.flatMap({ world.body(withID: $0) }),
-              let beam = world.castLaserPath(through: player.position + facing * 100),
+              let beam = world.castLaserPath(through: castThrough ?? (player.position + facing * 100)),
               let endPoint = beam.points.last, beam.points.count >= 2 else {
             fadeOutBeamIfNeeded()
             return
