@@ -28,6 +28,10 @@ struct GameView: View {
     @AppStorage("currentLevel") private var level = 1
     /// Developer level picker, toggled by the wrench icon on any overlay.
     @State private var showDevMenu = false
+    /// Config menu (controls picker), toggled by the gear icon.
+    @State private var showConfigMenu = false
+    /// Selected control scheme; applied when the next game starts.
+    @AppStorage("controlScheme") private var controlSchemeRaw = ControlScheme.joystick.rawValue
 
     /// True on the finished overlay after beating the last level.
     private var wonTheGame: Bool {
@@ -69,21 +73,32 @@ struct GameView: View {
                         if phase == .finished {
                             level = wonTheGame ? 1 : level + 1
                         }
-                        scene.startGame(level: level)
-                        phase = .playing
+                        start(level: level)
                     }
                     .font(.title2.bold())
                     .buttonStyle(.borderedProminent)
                     .tint(Color(red: 0.2, green: 0.65, blue: 0.9))
 
+                    if showConfigMenu {
+                        controlsPicker
+                    }
                     if showDevMenu {
                         devLevelGrid
                     }
                 }
 
-                // Developer corner: wrench toggles the level picker.
+                // Corner icons: gear toggles the config menu, wrench the
+                // developer level picker.
                 VStack {
                     HStack {
+                        Button {
+                            showConfigMenu.toggle()
+                        } label: {
+                            Image(systemName: "gearshape.fill")
+                                .font(.title3)
+                                .foregroundStyle(.white.opacity(0.35))
+                                .padding(16)
+                        }
                         Spacer()
                         Button {
                             showDevMenu.toggle()
@@ -106,6 +121,36 @@ struct GameView: View {
         }
     }
 
+    /// Applies the selected control scheme and starts the given level.
+    private func start(level: Int) {
+        scene.controlScheme = ControlScheme(rawValue: controlSchemeRaw) ?? .joystick
+        scene.startGame(level: level)
+        phase = .playing
+    }
+
+    /// Control scheme picker; the choice persists and applies on next start.
+    private var controlsPicker: some View {
+        VStack(spacing: 10) {
+            Text("CONTROLS")
+                .font(.caption.bold())
+                .foregroundStyle(.white.opacity(0.5))
+            ForEach([(ControlScheme.joystick, "Joystick + Button"),
+                     (ControlScheme.tap, "Tap to Move & Fire")], id: \.0) { scheme, label in
+                Button(label) {
+                    controlSchemeRaw = scheme.rawValue
+                }
+                .font(.headline)
+                .frame(width: 220, height: 44)
+                .background(controlSchemeRaw == scheme.rawValue
+                            ? Color(red: 0.2, green: 0.65, blue: 0.9)
+                            : Color.white.opacity(0.12))
+                .foregroundStyle(.white)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+            }
+        }
+        .padding(.top, 8)
+    }
+
     /// Rows of five level buttons; picking one jumps straight into that level.
     private var devLevelGrid: some View {
         VStack(spacing: 10) {
@@ -120,8 +165,7 @@ struct GameView: View {
                         Button("\(pick)") {
                             showDevMenu = false
                             level = pick
-                            scene.startGame(level: pick)
-                            phase = .playing
+                            start(level: pick)
                         }
                         .font(.headline)
                         .frame(width: 44, height: 44)

@@ -1,6 +1,17 @@
 import SpriteKit
 import GameEngine
 
+/// How the player steers and fires. Selected in the config menu (gear icon);
+/// applied when the next game starts.
+enum ControlScheme: String {
+    /// Virtual joystick (lower-left) + fire button (lower-right).
+    case joystick
+    /// No on-screen controls: single tap walks to the tapped position,
+    /// double tap fires a burst at it, double tap + hold keeps firing at
+    /// the finger.
+    case tap
+}
+
 final class GameScene: SKScene {
     /// Fired (on the main thread) shortly after the last NPC dies, once its
     /// death animation has played out.
@@ -72,6 +83,16 @@ final class GameScene: SKScene {
 
     private let touchController = TouchController()
     private var fireButtonHeld = false
+
+    /// Set by GameView before startGame; never changes mid-game.
+    var controlScheme: ControlScheme = .joystick
+    /// Tap scheme state: the finger that double-tapped (nil when not held),
+    /// where it is, and the end of the minimum burst window — a quick
+    /// double-tap fires for at least this long even if released instantly.
+    private var fireTouch: UITouch?
+    private var fireTarget: CGPoint = .zero
+    private var burstEndTime: TimeInterval = 0
+    private let tapBurstDuration: TimeInterval = 0.2
     private var laserNode: SKShapeNode?
     private var sparkNode: SKShapeNode?
 
@@ -186,6 +207,8 @@ final class GameScene: SKScene {
         laserNode = nil
         sparkNode = nil
         fireButtonHeld = false
+        fireTouch = nil
+        burstEndTime = 0
         batteryHUDNode = nil
         batteryFillBar = nil
         enemyDotsNode = nil
@@ -382,32 +405,36 @@ final class GameScene: SKScene {
         addChild(spark)
         sparkNode = spark
 
-        // Virtual joystick, pinned to the camera's lower-left corner.
-        let base = SKShapeNode(circleOfRadius: joystickRadius)
-        base.fillColor = SKColor(white: 1, alpha: 0.05)
-        base.strokeColor = SKColor(white: 1, alpha: 0.25)
-        base.lineWidth = 1.5
-        base.position = joystickCenter
-        base.zPosition = 3
-        camera.addChild(base)
-        joystickBase = base
+        // On-screen controls exist only in the joystick scheme; the tap
+        // scheme plays on a clean screen.
+        if controlScheme == .joystick {
+            // Virtual joystick, pinned to the camera's lower-left corner.
+            let base = SKShapeNode(circleOfRadius: joystickRadius)
+            base.fillColor = SKColor(white: 1, alpha: 0.05)
+            base.strokeColor = SKColor(white: 1, alpha: 0.25)
+            base.lineWidth = 1.5
+            base.position = joystickCenter
+            base.zPosition = 3
+            camera.addChild(base)
+            joystickBase = base
 
-        let knob = SKShapeNode(circleOfRadius: 26)
-        knob.fillColor = SKColor(white: 1, alpha: 0.28)
-        knob.strokeColor = SKColor(white: 1, alpha: 0.5)
-        knob.lineWidth = 1
-        base.addChild(knob)
-        joystickKnob = knob
+            let knob = SKShapeNode(circleOfRadius: 26)
+            knob.fillColor = SKColor(white: 1, alpha: 0.28)
+            knob.strokeColor = SKColor(white: 1, alpha: 0.5)
+            knob.lineWidth = 1
+            base.addChild(knob)
+            joystickKnob = knob
 
-        // Fire button, pinned to the camera's lower-right corner.
-        let fire = SKShapeNode(circleOfRadius: fireButtonRadius)
-        fire.fillColor = SKColor(red: 1, green: 0.25, blue: 0.3, alpha: 0.22)
-        fire.strokeColor = SKColor(red: 1, green: 0.4, blue: 0.4, alpha: 0.6)
-        fire.lineWidth = 2
-        fire.position = fireButtonCenter
-        fire.zPosition = 3
-        camera.addChild(fire)
-        fireButton = fire
+            // Fire button, pinned to the camera's lower-right corner.
+            let fire = SKShapeNode(circleOfRadius: fireButtonRadius)
+            fire.fillColor = SKColor(red: 1, green: 0.25, blue: 0.3, alpha: 0.22)
+            fire.strokeColor = SKColor(red: 1, green: 0.4, blue: 0.4, alpha: 0.6)
+            fire.lineWidth = 2
+            fire.position = fireButtonCenter
+            fire.zPosition = 3
+            camera.addChild(fire)
+            fireButton = fire
+        }
 
         // Battery HUD (rides the camera): icon with a color-coded charge bar;
         // slightly transparent so it doesn't compete with the action.
@@ -596,6 +623,10 @@ final class GameScene: SKScene {
     // MARK: - Input
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard controlScheme == .joystick else {
+            tapSchemeTouchesBegan(touches)
+            return
+        }
         for touch in touches {
             if isInSteeringZone(touch) {
                 if touchController.began(touch, as: .joystick) {
@@ -611,7 +642,41 @@ final class GameScene: SKScene {
         }
     }
 
+    /// Tap scheme: single tap walks there, double tap fires at it (and keeps
+    /// firing at the finger while held). Starting to fire cancels the walk —
+    /// the first tap of a double tap briefly sets one — so shooting never
+    /// drags the player toward the target.
+    private func tapSchemeTouchesBegan(_ touches: Set<UITouch>) {
+        guard gameStarted, let world else { return }
+        for touch in touches {
+            let location = touch.location(in: self)
+            if touch.tapCount >= 2 {
+                world.moveTarget = nil
+                fireTouch = touch
+                fireTarget = location
+                burstEndTime = (lastUpdateTime ?? 0) + tapBurstDuration
+                // Snap the aim so even the shortest burst leaves in the
+                // tapped direction; finger tracking then smooths.
+                if let player = world.playerID.flatMap({ world.body(withID: $0) }) {
+                    let dx = location.x - player.position.x
+                    let dy = location.y - player.position.y
+                    if dx * dx + dy * dy > 1 {
+                        playerNode?.zRotation = atan2(dy, dx)
+                    }
+                }
+            } else if fireTouch == nil {
+                world.moveTarget = Vector2(location.x, location.y)
+            }
+        }
+    }
+
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        if controlScheme == .tap {
+            for touch in touches where touch === fireTouch {
+                fireTarget = touch.location(in: self)
+            }
+            return
+        }
         for touch in touches where touchController.role(of: touch) == .joystick {
             updateJoystick(with: touch)
         }
@@ -678,6 +743,12 @@ final class GameScene: SKScene {
     }
 
     private func endTouches(_ touches: Set<UITouch>) {
+        if controlScheme == .tap {
+            for touch in touches where touch === fireTouch {
+                fireTouch = nil // the burst window may keep firing briefly
+            }
+            return
+        }
         for touch in touches {
             switch touchController.ended(touch) {
             case .joystick:
@@ -694,12 +765,29 @@ final class GameScene: SKScene {
 
     // MARK: - Laser
 
+    /// True while the current scheme wants the beam on: held fire button, or
+    /// a held double-tap / its minimum burst window.
+    private var firingRequested: Bool {
+        switch controlScheme {
+        case .joystick: return fireButtonHeld
+        case .tap: return fireTouch != nil || (lastUpdateTime ?? 0) < burstEndTime
+        }
+    }
+
     private func processLaser() {
         guard let world else { return }
+        // Tap scheme: steer the aim toward the finger every frame (the
+        // double-tap snapped it initially; this tracks drags smoothly).
+        if controlScheme == .tap, firingRequested,
+           let player = world.playerID.flatMap({ world.body(withID: $0) }) {
+            let dx = fireTarget.x - CGFloat(player.position.x)
+            let dy = fireTarget.y - CGFloat(player.position.y)
+            if dx * dx + dy * dy > 1 { rotatePlayer(toward: atan2(dy, dx)) }
+        }
         // The beam fires along the player's current facing (the aim line the
-        // joystick steers) — the fire button has no direction of its own.
+        // joystick or finger steers) — firing has no direction of its own.
         let facing = playerNode.map { Vector2(cos(Double($0.zRotation)), sin(Double($0.zRotation))) }
-        guard laserCharge > 0, fireButtonHeld, let facing,
+        guard laserCharge > 0, firingRequested, let facing,
               let player = world.playerID.flatMap({ world.body(withID: $0) }),
               let beam = world.castLaserPath(through: player.position + facing * 100),
               let endPoint = beam.points.last, beam.points.count >= 2 else {
@@ -843,6 +931,8 @@ final class GameScene: SKScene {
         world.remove(bodyID: pid) // runners stand down without a target
         SoundManager.shared.playPlayerDeath()
         fireButtonHeld = false
+        fireTouch = nil
+        burstEndTime = 0
         fadeOutBeamIfNeeded()
         for node in shooterAimNodes.values { node.isHidden = true }
         if let node = playerNode {
