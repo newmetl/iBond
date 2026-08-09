@@ -46,8 +46,9 @@ can't finish it — forces a battery grab mid-fight; exactly one full Orange;
   3 from L34.
 - Hunters: designated carriers drop ORANGE from L13 — 1, 2 from L18,
   3 from L38.
-- WHITE exists only in boss fights: pre-placed arena pickup(s), 1 per boss
-  level, 2 from L40. Never dropped, never on regular maps. The boss itself
+- WHITE exists only in boss fights FROM LEVEL 30 (Wojtek, same day):
+  pre-placed arena pickup(s), 1 at L30, 2 from L40. Orange debuts in the
+  L10 boss arena (2 spares there; L20's arena carries 2 Orange too). Never dropped, never on regular maps. The boss itself
   drops nothing; its escort follows normal carrier rules.
 - Map spares: Red tapers off (0 from L46); Orange appears L13 and grows to 5.
 - Every level starts with a full Red; pickups overwrite type + charge.
@@ -68,7 +69,7 @@ drop counts. Boss arenas are deliberately small.
 | 7 | 2.0 | 6 | – | – | 3 | – | – | – | – | – | – | 9 | 3 | 1 | – | – | 2 | – |
 | 8 | 2.0 | 4 | 2 | – | 3 | – | – | – | – | – | – | 10 | 3 | 1 | – | – | 2 | – |
 | 9 | 2.0 | 4 | 3 | – | 4 | – | – | – | – | – | – | 11 | 4 | 1 | – | – | 2 | – |
-| 10 | 2.0 | 2 | – | – | – | – | – | – | – | – | W | 6 | 3 | 1 | – | 1 | – | – |
+| 10 | 2.0 | 2 | – | – | – | – | – | – | – | – | W | 6 | 3 | 1 | 2 | – | – | – |
 | 11 | 2.0 | 4 | 2 | – | 3 | – | – | 1 | – | – | – | 10 | 4 | 1 | – | – | 2 | – |
 | 12 | 2.5 | 4 | 3 | – | 3 | – | – | 1 | – | – | – | 12 | 5 | 1 | – | – | 2 | – |
 | 13 | 2.5 | 4 | 3 | – | 3 | – | – | 2 | – | – | – | 12 | 5 | 1 | 1 | – | 2 | 1 |
@@ -78,7 +79,7 @@ drop counts. Boss arenas are deliberately small.
 | 17 | 3.0 | 4 | 5 | – | 2 | 3 | – | 3 | – | – | – | 14 | 7 | 2 | 1 | – | 2 | 1 |
 | 18 | 3.0 | 3 | 6 | – | 2 | 3 | – | 3 | – | – | – | 15 | 8 | 2 | 1 | – | 2 | 2 |
 | 19 | 3.0 | 3 | 6 | – | 2 | 4 | – | 4 | – | – | – | 15 | 8 | 2 | 1 | – | 2 | 2 |
-| 20 | 2.0 | – | 3 | – | – | – | – | 1 | – | – | W | 6 | 4 | – | 1 | 1 | – | 1 |
+| 20 | 2.0 | – | 3 | – | – | – | – | 1 | – | – | W | 6 | 4 | – | 2 | – | – | 1 |
 | 21 | 3.0 | 3 | 5 | – | 2 | 4 | – | 3 | – | – | – | 15 | 8 | 2 | 1 | – | 2 | 1 |
 | 22 | 3.0 | 3 | 4 | 2 | 2 | 4 | – | 3 | – | – | – | 16 | 8 | 2 | 1 | – | 2 | 1 |
 | 23 | 3.0 | 2 | 5 | 2 | 2 | 4 | – | 3 | – | – | – | 16 | 9 | 2 | 1 | – | 2 | 1 |
@@ -111,8 +112,8 @@ drop counts. Boss arenas are deliberately small.
 | 50 | 3.0 | – | – | 6 | – | – | 2 | – | – | 4 | W | 10 | 8 | – | 3 | 2 | – | 3 |
 
 Introduction milestones: Runner I @1 · Shooter I + rocks @3 · Red spares @4 ·
-Red carrier drops @5 · mirrors @6 · Runner II @8 · Boss + White @10 ·
-Hunter I @11 · Orange @13 · Shooter II @15 · Runner III @22 · Hunter II @24 ·
+Red carrier drops @5 · mirrors @6 · Runner II @8 · Boss + Orange @10 ·
+Hunter I @11 · Orange carriers @13 · Shooter II @15 · Runner III @22 · Hunter II @24 ·
 Shooter III @27 · Hunter III @33.
 
 Design shape: breather after every boss; tier mixes rotate downward-tier-out;
