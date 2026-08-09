@@ -485,7 +485,7 @@ final class GameScene: SKScene {
             let ringCount = bossIDs.contains(body.id) ? 3 : tier
             for ring in 0..<ringCount {
                 let armor = SKShapeNode(circleOfRadius: body.radius + 4 + CGFloat(ring) * 4)
-                armor.name = "armorRing"
+                armor.name = "armorRing\(ring)" // index 0 = innermost
                 armor.strokeColor = SKColor(white: 0.95, alpha: 0.75)
                 armor.lineWidth = 1.5
                 armor.fillColor = .clear
@@ -1067,9 +1067,18 @@ final class GameScene: SKScene {
             node.fillColor = SKColor(red: base.r + (1 - base.r) * f,
                                      green: base.g + (1 - base.g) * f,
                                      blue: base.b + (1 - base.b) * f, alpha: 1)
-            // Armor visibly breaking: the rings fade out with the shield.
-            node.enumerateChildNodes(withName: "armorRing") { ring, _ in
-                ring.alpha = 1 - f * 0.85
+            // The rings ARE the health bar: each covers an equal slice of
+            // the shield and peels off outermost-first as it burns (the
+            // boss's three rings = thirds of its health).
+            let rings = node.children.compactMap { child -> (SKNode, Int)? in
+                guard let name = child.name, name.hasPrefix("armorRing"),
+                      let index = Int(name.dropFirst("armorRing".count)) else { return nil }
+                return (child, index)
+            }
+            let count = Double(rings.count)
+            for (ring, index) in rings {
+                let depletionStart = count - 1 - Double(index) // outermost first
+                ring.alpha = CGFloat(max(0, min(1, 1 - (Double(f) * count - depletionStart))))
             }
         }
     }

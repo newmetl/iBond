@@ -31,15 +31,17 @@ enum EnemyTiers {
 }
 
 /// The Warden — every 10th level's boss (more bosses later): hunter behavior
-/// at 3× size, slow, massively shielded. Red alone (3s) can't finish it;
-/// exactly one full Orange or 1s of White can.
+/// at 3× size, slow, massively shielded. Its three armor rings are its
+/// health bar: each ring covers a third of the shield and peels off
+/// (outermost first) as the shield burns. 9s of red beam = three full Red
+/// batteries; 4.5s of Orange; ~2.3s of White.
 enum BossStats {
     static let radius = 42.0
     static let mass = 9.0
     static let patrolSpeed = 35.0
     static let approachSpeed = 100.0
     static let aimDuration = 0.8
-    static let shield = 4.0
+    static let shield = 9.0
 }
 
 /// One level's composition. See
