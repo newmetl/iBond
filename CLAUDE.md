@@ -13,9 +13,10 @@ pure-Swift custom physics/raycast engine. Rebuilt from scratch in 2026 from a
   line-of-sight), Rect, Laser.swift (LaserHit/Mirror/LaserPath + castLaserPath).
 - `App/` — app layer. `GameScene.swift` (~900 lines: world building, camera,
   input, all gameplay systems, HUD, effects), `Levels.swift` (BatteryType
-  red/orange/white with fixed capacity+power, EnemyTiers I–III, BossStats,
-  and LevelConfig: an explicit 50-row level table, boss every 10th level;
-  level 0 = dev hunter test), `iBondApp.swift`
+  red/orange/white with fixed capacity+power, EnemyTiers I–III, BossSpec/
+  BossStats (huge 3× versions of regular kinds), and LevelConfig: a
+  generated 100-row table — one new kind per decade, huge boss of that kind
+  every 10th level; level 0 = dev hunter test), `iBondApp.swift`
   (SwiftUI shell + menu/playing/finished/gameOver overlay state machine, level
   progression persisted via @AppStorage "currentLevel"), `TouchController.swift`
   (touch role assignment by start zone), `SoundManager.swift` + `Sounds/*.wav`
@@ -105,7 +106,7 @@ xcrun devicectl device process launch --device C3A2910A-B2BA-57B7-9A72-A21E30126
   Per-level composition (map scale, per-tier enemy counts, obstacles, typed
   battery spares/carriers) plus tier/battery/boss stats: `App/Levels.swift`.
   Kill model: shield seconds ÷ battery power; white pierces everything.
-  Death retries the same level; finishing level 50 wraps to level 1.
+  Death retries the same level; finishing level 100 wraps to level 1.
   Design docs: `2026-08-09-tiers-batteries-bosses-plan.md` and
   `docs/superpowers/specs/2026-08-08-laser-taser-current-state.md`.
 

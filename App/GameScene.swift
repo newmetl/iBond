@@ -388,21 +388,36 @@ final class GameScene: SKScene {
             }
         }
 
-        // The boss: an oversized, slow, heavily shielded hunter.
-        var placedBosses = 0
-        var attempts = 0
-        while placedBosses < config.bossCount, attempts < 300 {
-            attempts += 1
-            guard let position = world.randomFreePosition(radius: BossStats.radius, using: &rng),
-                  position.distance(to: playerStart) > config.runnerMinPlayerDistance else { continue }
-            let id = world.addHunter(at: position, radius: BossStats.radius,
-                                     mass: BossStats.mass)
-            hunterPatrolSpeeds[id] = BossStats.patrolSpeed
-            hunterApproachSpeeds[id] = BossStats.approachSpeed
-            hunterAimDurations[id] = BossStats.aimDuration
-            shieldSeconds[id] = BossStats.shield
-            bossIDs.insert(id)
-            placedBosses += 1
+        // Bosses: huge versions of regular kinds; behavior follows the kind.
+        for spec in config.bosses {
+            var placed = false
+            var bossAttempts = 0
+            while !placed, bossAttempts < 300 {
+                bossAttempts += 1
+                guard let position = world.randomFreePosition(radius: BossStats.radius, using: &rng),
+                      position.distance(to: playerStart) > config.runnerMinPlayerDistance else { continue }
+                let id: BodyID
+                switch spec.kind {
+                case .runner:
+                    id = world.addRunner(at: position, radius: BossStats.radius,
+                                         mass: BossStats.mass)
+                    world.runnerSpeedOverrides[id] = BossStats.runnerSpeed(tier: spec.tier)
+                case .shooter:
+                    id = world.addShooter(at: position, radius: BossStats.radius,
+                                          mass: BossStats.mass)
+                    shooterAimDurations[id] = BossStats.shooterAim(tier: spec.tier)
+                case .hunter:
+                    id = world.addHunter(at: position, radius: BossStats.radius,
+                                         mass: BossStats.mass)
+                    hunterPatrolSpeeds[id] = BossStats.patrolSpeed
+                    hunterApproachSpeeds[id] = BossStats.hunterApproach(tier: spec.tier)
+                    hunterAimDurations[id] = BossStats.hunterAim(tier: spec.tier)
+                }
+                shieldSeconds[id] = spec.shield
+                enemyTierIndex[id] = spec.tier
+                bossIDs.insert(id)
+                placed = true
+            }
         }
 
         self.world = world
@@ -632,7 +647,14 @@ final class GameScene: SKScene {
     /// tellable at a glance both on the map and in the dot row. The boss has
     /// its own deep red-orange.
     private func enemyColor(for body: CircleBody) -> (r: CGFloat, g: CGFloat, b: CGFloat) {
-        if bossIDs.contains(body.id) { return (0.95, 0.3, 0.1) }
+        if bossIDs.contains(body.id) {
+            // Bosses: a deep, saturated version of their kind's hue.
+            switch body.kind {
+            case .runner: return (0.55, 0.12, 0.85)
+            case .shooter: return (0.85, 0.1, 0.15)
+            default: return (0.95, 0.3, 0.1)
+            }
+        }
         let tier = min(max(enemyTierIndex[body.id] ?? 0, 0), 2)
         switch body.kind {
         case .runner:
@@ -658,9 +680,10 @@ final class GameScene: SKScene {
         enemyDotsNode.removeAllChildren()
         guard !hostiles.isEmpty else { return }
         func rank(_ body: CircleBody) -> Int {
+            if bossIDs.contains(body.id) { return 1 }
             switch body.kind {
             case .shooter: return 0
-            case .hunter: return bossIDs.contains(body.id) ? 1 : 2
+            case .hunter: return 2
             default: return 3
             }
         }
@@ -1276,11 +1299,13 @@ final class GameScene: SKScene {
         }
     }
 
-    /// Runners, hunters, and the boss (a big hunter) all kill on contact.
+    /// Runners, hunters, and every boss (huge shooters included) kill on
+    /// contact.
     private func checkTouchKills() {
         guard gameStarted, let world, let pid = world.playerID,
               let player = world.body(withID: pid) else { return }
-        for body in world.bodies where body.kind == .runner || body.kind == .hunter {
+        for body in world.bodies
+        where body.kind == .runner || body.kind == .hunter || bossIDs.contains(body.id) {
             if body.position.distance(to: player.position) <= body.radius + player.radius + 0.5 {
                 killPlayer()
                 return

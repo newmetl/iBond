@@ -1,8 +1,7 @@
 # Tiered enemies, typed batteries, bosses — level plan
 
 Date: 2026-08-09, restructured to 100 levels 2026-08-10
-Status: table approved pending Wojtek's review; tier/battery mechanics
-already implemented (50-level layout in code until this table lands).
+Status: implemented 2026-08-10 (100-level layout live in Levels.swift).
 
 ## Core mechanic
 

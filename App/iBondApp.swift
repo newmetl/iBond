@@ -160,25 +160,30 @@ struct GameView: View {
             Text("DEV · pick level")
                 .font(.caption.bold())
                 .foregroundStyle(.white.opacity(0.5))
-            ForEach(Array(stride(from: 1, through: LevelConfig.count, by: 10)),
-                    id: \.self) { rowStart in
-                HStack(spacing: 6) {
-                    ForEach(rowStart..<min(rowStart + 10, LevelConfig.count + 1),
-                            id: \.self) { pick in
-                        Button("\(pick)") {
-                            showDevMenu = false
-                            level = pick
-                            start(level: pick)
+            ScrollView {
+                VStack(spacing: 5) {
+                    ForEach(Array(stride(from: 1, through: LevelConfig.count, by: 10)),
+                            id: \.self) { rowStart in
+                        HStack(spacing: 5) {
+                            ForEach(rowStart..<min(rowStart + 10, LevelConfig.count + 1),
+                                    id: \.self) { pick in
+                                Button("\(pick)") {
+                                    showDevMenu = false
+                                    level = pick
+                                    start(level: pick)
+                                }
+                                .font(.caption.bold())
+                                .frame(width: 29, height: 29)
+                                .background(pick == level ? Color(red: 0.2, green: 0.65, blue: 0.9)
+                                                          : Color.white.opacity(0.12))
+                                .foregroundStyle(.white)
+                                .clipShape(RoundedRectangle(cornerRadius: 7))
+                            }
                         }
-                        .font(.footnote.bold())
-                        .frame(width: 30, height: 34)
-                        .background(pick == level ? Color(red: 0.2, green: 0.65, blue: 0.9)
-                                                  : Color.white.opacity(0.12))
-                        .foregroundStyle(.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
                     }
                 }
             }
+            .frame(maxWidth: 350, maxHeight: 240)
             Button("Hunter test") {
                 showDevMenu = false
                 level = 0
