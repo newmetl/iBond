@@ -453,17 +453,7 @@ final class GameScene: SKScene {
         playerNode = player
 
         for body in world.bodies where body.kind.isHostile {
-            let rgb: (r: CGFloat, g: CGFloat, b: CGFloat)
-            switch body.kind {
-            case .runner:
-                rgb = (0.75, 0.42, 1)     // purple: chases
-            case .hunter:
-                rgb = bossIDs.contains(body.id)
-                    ? (0.95, 0.3, 0.1)    // deep red-orange: the boss
-                    : (1, 0.62, 0.15)     // orange: patrols+shoots
-            default:
-                rgb = (1, 0.45, 0.35)     // red: shoots
-            }
+            let rgb = enemyColor(for: body)
             enemyBaseColors[body.id] = rgb
             let node = makeCircleNode(radius: body.radius,
                                       fill: SKColor(red: rgb.r, green: rgb.g, blue: rgb.b, alpha: 1))
@@ -620,6 +610,23 @@ final class GameScene: SKScene {
         enemyDotsNode = dots
     }
 
+    /// Body (and HUD dot) color: each kind keeps its hue, each tier gets its
+    /// own shade — dark (I) → vivid (II) → bright (III) — so versions are
+    /// tellable at a glance both on the map and in the dot row. The boss has
+    /// its own deep red-orange.
+    private func enemyColor(for body: CircleBody) -> (r: CGFloat, g: CGFloat, b: CGFloat) {
+        if bossIDs.contains(body.id) { return (0.95, 0.3, 0.1) }
+        let tier = min(max(enemyTierIndex[body.id] ?? 0, 0), 2)
+        switch body.kind {
+        case .runner:
+            return [(0.55, 0.3, 0.75), (0.75, 0.42, 1.0), (0.9, 0.65, 1.0)][tier]
+        case .hunter:
+            return [(0.75, 0.45, 0.1), (1.0, 0.62, 0.15), (1.0, 0.78, 0.4)][tier]
+        default: // shooters (and legacy npc)
+            return [(0.75, 0.32, 0.25), (1.0, 0.45, 0.35), (1.0, 0.65, 0.55)][tier]
+        }
+    }
+
     /// Rebuilds the HUD dot row whenever the set of living enemies changes.
     /// Each dot wears its enemy's actual body color (shooter red, boss
     /// deep red-orange and larger, hunter orange, runner purple), grouped
@@ -640,7 +647,10 @@ final class GameScene: SKScene {
             default: return 3
             }
         }
-        let sorted = hostiles.sorted { (rank($0), $0.id) < (rank($1), $1.id) }
+        let sorted = hostiles.sorted {
+            (rank($0), enemyTierIndex[$0.id] ?? 0, $0.id)
+                < (rank($1), enemyTierIndex[$1.id] ?? 0, $1.id)
+        }
         // Late levels field 30+ enemies; tighten the row so it stays on screen.
         let spacing: CGFloat = sorted.count > 24 ? 7 : 12
         var x = -CGFloat(sorted.count - 1) * spacing / 2
