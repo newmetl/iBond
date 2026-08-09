@@ -138,7 +138,7 @@ final class GameScene: SKScene {
     private var batteryHUDNode: SKNode?
     private var batteryFillBar: SKSpriteNode?
     private var enemyDotsNode: SKNode?
-    private var lastEnemyDotCounts: (shooters: Int, hunters: Int, runners: Int) = (-1, -1, -1)
+    private var lastEnemyDotIDs: Set<BodyID> = []
     private var frameDt: Double = 0   // last frame's clamped wall-clock dt
     private var beamVisible = false   // tracks show/fade state of beam + spark
 
@@ -251,7 +251,7 @@ final class GameScene: SKScene {
         batteryHUDNode = nil
         batteryFillBar = nil
         enemyDotsNode = nil
-        lastEnemyDotCounts = (-1, -1, -1)
+        lastEnemyDotIDs = []
         batteryType = .red
         laserCharge = BatteryType.red.capacity
         beamVisible = false
@@ -620,35 +620,35 @@ final class GameScene: SKScene {
         enemyDotsNode = dots
     }
 
-    /// Rebuilds the HUD dot row whenever the remaining-enemy counts change:
-    /// red dots for shooters, orange for hunters, purple for runners,
-    /// matching their map colors.
+    /// Rebuilds the HUD dot row whenever the set of living enemies changes.
+    /// Each dot wears its enemy's actual body color (shooter red, boss
+    /// deep red-orange and larger, hunter orange, runner purple), grouped
+    /// shooters → boss → hunters → runners.
     private func updateEnemyDots() {
         guard let world, let enemyDotsNode else { return }
-        var shooters = 0
-        var hunters = 0
-        var runners = 0
-        for body in world.bodies {
-            if body.kind == .shooter { shooters += 1 }
-            if body.kind == .hunter { hunters += 1 }
-            if body.kind == .runner { runners += 1 }
-        }
-        guard (shooters, hunters, runners) != lastEnemyDotCounts else { return }
-        lastEnemyDotCounts = (shooters, hunters, runners)
+        let hostiles = world.bodies.filter { $0.kind.isHostile }
+        let ids = Set(hostiles.map(\.id))
+        guard ids != lastEnemyDotIDs else { return }
+        lastEnemyDotIDs = ids
 
         enemyDotsNode.removeAllChildren()
-        let total = shooters + hunters + runners
-        guard total > 0 else { return }
+        guard !hostiles.isEmpty else { return }
+        func rank(_ body: CircleBody) -> Int {
+            switch body.kind {
+            case .shooter: return 0
+            case .hunter: return bossIDs.contains(body.id) ? 1 : 2
+            default: return 3
+            }
+        }
+        let sorted = hostiles.sorted { (rank($0), $0.id) < (rank($1), $1.id) }
         // Late levels field 30+ enemies; tighten the row so it stays on screen.
-        let spacing: CGFloat = total > 24 ? 7 : 12
-        var x = -CGFloat(total - 1) * spacing / 2
-        for index in 0..<total {
-            let dot = SKShapeNode(circleOfRadius: 3.5)
-            dot.fillColor = index < shooters
-                ? SKColor(red: 1, green: 0.45, blue: 0.35, alpha: 1)   // shooter red
-                : index < shooters + hunters
-                    ? SKColor(red: 1, green: 0.62, blue: 0.15, alpha: 1) // hunter orange
-                    : SKColor(red: 0.75, green: 0.42, blue: 1, alpha: 1) // runner purple
+        let spacing: CGFloat = sorted.count > 24 ? 7 : 12
+        var x = -CGFloat(sorted.count - 1) * spacing / 2
+        for body in sorted {
+            let isBoss = bossIDs.contains(body.id)
+            let dot = SKShapeNode(circleOfRadius: isBoss ? 5.5 : 3.5)
+            let rgb = enemyBaseColors[body.id] ?? (1, 1, 1)
+            dot.fillColor = SKColor(red: rgb.r, green: rgb.g, blue: rgb.b, alpha: 1)
             dot.strokeColor = .clear
             dot.position = CGPoint(x: x, y: 0)
             enemyDotsNode.addChild(dot)
