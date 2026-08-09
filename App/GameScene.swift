@@ -196,7 +196,7 @@ final class GameScene: SKScene {
         processLaser()
         processShooters(currentTime)
         processHunters(currentTime)
-        checkRunnerTouches()
+        checkTouchKills()
         checkBatteryPickups()
         updateBatteryHUD()
         updateEnemyDots()
@@ -1276,10 +1276,11 @@ final class GameScene: SKScene {
         }
     }
 
-    private func checkRunnerTouches() {
+    /// Runners, hunters, and the boss (a big hunter) all kill on contact.
+    private func checkTouchKills() {
         guard gameStarted, let world, let pid = world.playerID,
               let player = world.body(withID: pid) else { return }
-        for body in world.bodies where body.kind == .runner {
+        for body in world.bodies where body.kind == .runner || body.kind == .hunter {
             if body.position.distance(to: player.position) <= body.radius + player.radius + 0.5 {
                 killPlayer()
                 return
