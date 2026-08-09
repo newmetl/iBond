@@ -62,6 +62,17 @@ public final class World {
         return id
     }
 
+    /// Adds an app-steered patrolling hostile: drive it with
+    /// `setVelocity(_:forBodyID:)` each frame; the engine integrates, damps,
+    /// and collides it like any hostile but never overrides its velocity.
+    @discardableResult
+    public func addHunter(at position: Vector2, radius: Double = 14, mass: Double = 1) -> BodyID {
+        let id = makeID()
+        bodies.append(CircleBody(id: id, kind: .hunter, position: position,
+                                 velocity: .zero, radius: radius, mass: mass))
+        return id
+    }
+
     /// Runner IDs that have started chasing (one-way; set by the app when a
     /// runner first becomes visible on screen).
     public private(set) var activeRunnerIDs: Set<BodyID> = []

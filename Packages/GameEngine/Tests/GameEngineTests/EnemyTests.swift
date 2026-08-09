@@ -164,3 +164,60 @@ final class EnemyTests: XCTestCase {
         XCTAssertEqual(path.points.count, 2)
     }
 }
+
+// MARK: - Hunters
+
+final class HunterTests: XCTestCase {
+    func testHunterIsHostileKillableKind() {
+        XCTAssertTrue(CircleBody.Kind.hunter.isHostile)
+    }
+
+    func testAddHunterCreatesHunterBody() {
+        let world = World(size: Vector2(800, 800))
+        let id = world.addHunter(at: Vector2(200, 300), radius: 14)
+        let body = world.body(withID: id)
+        XCTAssertEqual(body?.kind, .hunter)
+        XCTAssertEqual(body?.position, Vector2(200, 300))
+        XCTAssertEqual(body?.radius, 14)
+    }
+
+    /// Hunters are app-steered via setVelocity; the engine integrates them
+    /// (with hostile damping) rather than overriding their velocity.
+    func testHunterMovesWithSetVelocityAndIsDamped() {
+        let world = World(size: Vector2(800, 800))
+        let id = world.addHunter(at: Vector2(100, 100))
+        world.setVelocity(Vector2(60, 0), forBodyID: id)
+        world.update(dt: 0.1)
+        let body = world.body(withID: id)!
+        XCTAssertEqual(body.position.x, 106, accuracy: 0.5)
+        XCTAssertEqual(body.position.y, 100, accuracy: 1e-9)
+        // Damping shrank but did not zero the velocity (the app re-steers
+        // every rendered frame).
+        XCTAssertGreaterThan(body.velocity.x, 0)
+        XCTAssertLessThan(body.velocity.x, 60)
+    }
+
+    func testHunterIsBlockedByRock() {
+        let world = World(size: Vector2(800, 800))
+        world.addRock(at: Vector2(160, 100), radius: 30)
+        let id = world.addHunter(at: Vector2(100, 100), radius: 14)
+        for _ in 0..<120 { // 1s of fixed steps, driving into the rock
+            world.setVelocity(Vector2(120, 0), forBodyID: id)
+            world.update(dt: 1.0 / 120.0)
+        }
+        let body = world.body(withID: id)!
+        // Stopped at the rock's surface: rock center 160 minus radii 30+14.
+        XCTAssertEqual(body.position.x, 116, accuracy: 1.5)
+    }
+
+    func testHunterStaysInBounds() {
+        let world = World(size: Vector2(300, 300))
+        let id = world.addHunter(at: Vector2(280, 150), radius: 14)
+        for _ in 0..<120 {
+            world.setVelocity(Vector2(400, 0), forBodyID: id)
+            world.update(dt: 1.0 / 120.0)
+        }
+        let body = world.body(withID: id)!
+        XCTAssertEqual(body.position.x, 286, accuracy: 1e-6) // size - radius
+    }
+}

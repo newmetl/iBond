@@ -42,7 +42,9 @@ struct GameView: View {
         switch phase {
         case .menu: return "Laser Taser"
         case .playing: return ""
-        case .finished: return wonTheGame ? "You won!" : "Level \(level) done!"
+        case .finished:
+            if wonTheGame { return "You won!" }
+            return level == 0 ? "Test done!" : "Level \(level) done!"
         case .gameOver: return "Game over!"
         }
     }
@@ -177,6 +179,17 @@ struct GameView: View {
                     }
                 }
             }
+            Button("Hunter test") {
+                showDevMenu = false
+                level = 0
+                start(level: 0)
+            }
+            .font(.headline)
+            .frame(width: 152, height: 44)
+            .background(level == 0 ? Color(red: 0.2, green: 0.65, blue: 0.9)
+                                   : Color.white.opacity(0.12))
+            .foregroundStyle(.white)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
         }
         .padding(.top, 8)
     }
