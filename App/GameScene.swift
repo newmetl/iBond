@@ -466,13 +466,21 @@ final class GameScene: SKScene {
             facingLine.strokeColor = SKColor(white: 1, alpha: 0.7)
             facingLine.lineWidth = 1.5
             node.addChild(facingLine)
-            // Tier pips: tier II gets one dot, tier III two (tier I none).
-            for pip in 0..<(enemyTierIndex[body.id] ?? 0) {
-                let dot = SKShapeNode(circleOfRadius: 2)
-                dot.fillColor = .white
-                dot.strokeColor = .clear
-                dot.position = CGPoint(x: -3.5 + CGFloat(pip) * 7, y: -body.radius * 0.45)
-                node.addChild(dot)
+            // Version cues that scale with toughness: heavier outline per
+            // tier (tier III glows), plus concentric armor rings — one for
+            // tier II, two for tier III, three for the boss — that fade as
+            // the shield burns (see applyLaserDamage).
+            let tier = min(max(enemyTierIndex[body.id] ?? 0, 0), 2)
+            node.lineWidth = 1.5 + CGFloat(tier)
+            if tier >= 2 { node.glowWidth = 2 }
+            let ringCount = bossIDs.contains(body.id) ? 3 : tier
+            for ring in 0..<ringCount {
+                let armor = SKShapeNode(circleOfRadius: body.radius + 4 + CGFloat(ring) * 4)
+                armor.name = "armorRing"
+                armor.strokeColor = SKColor(white: 0.95, alpha: 0.75)
+                armor.lineWidth = 1.5
+                armor.fillColor = .clear
+                node.addChild(armor)
             }
             addChild(node)
             npcNodes[body.id] = node
@@ -619,11 +627,11 @@ final class GameScene: SKScene {
         let tier = min(max(enemyTierIndex[body.id] ?? 0, 0), 2)
         switch body.kind {
         case .runner:
-            return [(0.55, 0.3, 0.75), (0.75, 0.42, 1.0), (0.9, 0.65, 1.0)][tier]
+            return [(0.45, 0.22, 0.62), (0.75, 0.42, 1.0), (0.95, 0.7, 1.0)][tier]
         case .hunter:
-            return [(0.75, 0.45, 0.1), (1.0, 0.62, 0.15), (1.0, 0.78, 0.4)][tier]
+            return [(0.6, 0.35, 0.06), (1.0, 0.62, 0.15), (1.0, 0.85, 0.35)][tier]
         default: // shooters (and legacy npc)
-            return [(0.75, 0.32, 0.25), (1.0, 0.45, 0.35), (1.0, 0.65, 0.55)][tier]
+            return [(0.62, 0.22, 0.16), (1.0, 0.45, 0.35), (1.0, 0.7, 0.6)][tier]
         }
     }
 
@@ -1047,6 +1055,10 @@ final class GameScene: SKScene {
             node.fillColor = SKColor(red: base.r + (1 - base.r) * f,
                                      green: base.g + (1 - base.g) * f,
                                      blue: base.b + (1 - base.b) * f, alpha: 1)
+            // Armor visibly breaking: the rings fade out with the shield.
+            node.enumerateChildNodes(withName: "armorRing") { ring, _ in
+                ring.alpha = 1 - f * 0.85
+            }
         }
     }
 
