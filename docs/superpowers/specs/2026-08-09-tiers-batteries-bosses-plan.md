@@ -1,139 +1,182 @@
 # Tiered enemies, typed batteries, bosses — level plan
 
-Date: 2026-08-09
-Status: approved by Wojtek (white pierces everything) and implemented 2026-08-09.
+Date: 2026-08-09, restructured to 100 levels 2026-08-10
+Status: table approved pending Wojtek's review; tier/battery mechanics
+already implemented (50-level layout in code until this table lands).
 
-## Core mechanic change
+## Core mechanic
 
-Difficulty stops coming from shrinking battery capacity (that scaling is
-removed). Instead every enemy gets a **shield** measured in seconds-of-red-beam
-and every battery type a **power multiplier**; kill time = shield ÷ power.
-The ramp comes from enemy tier mix, counts, map size, and which battery types
-a level supplies.
-
-## Batteries (fixed stats, never scale with level)
-
-| Type | Capacity | Power | Special |
-|------|----------|-------|---------|
-| Red | 3.0s | 1× | today's laser (pickup recolored from green) |
-| Orange | 2.0s | 2× | kills twice as fast |
-| White | 1.0s | 4× | penetrates rocks and mirrors (straight line, no reflection, no self-hit); suggestion: kills every enemy along the line |
-
-- Picking up a battery overwrites the remaining charge AND type (a Red pickup
-  while holding a half White is a downgrade — deliberate strategy element).
-- Every level starts with a full Red.
+Kill time = shield seconds ÷ battery power. Battery capacities are uniform
+(3s each); Red 1×, Orange 2×, White 4× + pierces rocks, mirrors, and every
+enemy on the line. Pickups overwrite type + charge; every level starts on a
+full Red. Enemies are damageable only after they've been seen on screen.
+Runners, hunters, and all bosses kill on touch.
 
 ## Enemy tiers
 
 | | Tier I | Tier II | Tier III |
 |---|---|---|---|
-| Runner speed / shield | 130 / 0 | 170 / 0.2s | 210 / 0.45s |
-| Shooter aim / shield | 2.2s / 0 | 1.6s / 0.25s | 1.1s / 0.5s |
-| Hunter approach / aim / shield | 190 / 0.6s / 0.3s | 210 / 0.5s / 0.6s | 230 / 0.4s / 1.0s |
+| Runner speed / shield | 130 / 0 | 170 / 0.5s | 210 / 1.2s |
+| Shooter aim / shield | 2.2s / 0 | 1.6s / 0.6s | 1.1s / 1.4s |
+| Hunter approach / aim / shield | 190 / 0.6s / **0** | 210 / 0.5s / 1.0s | 230 / 0.4s / 2.2s |
 
-Hunter patrol speed stays 55 across tiers. Player speed stays 320.
-Tier visuals: pips or brightness steps on the body color (TBD at build time).
+H1 is now instantly killable (Wojtek 2026-08-10); protection scales per
+tier like the other kinds.
 
-**Boss: Warden** (first boss; hunter behavior): 3× size (42pt radius),
-patrol 35, approach 100, aim 0.8s, shield 4.0s. Boss math: Red alone (3s)
-can't finish it — forces a battery grab mid-fight; exactly one full Orange;
-1s of White. More bosses later (slots at levels 10 and 20).
+## Bosses: huge versions of regular enemies
 
-## Battery sourcing rules
+Every 10th level. A boss is a 3×-size (42pt), mass-9 version of the kind+tier
+its decade introduced, with 3 armor rings as its health bar (each ring = a
+third of the shield, peeling outermost-first). Behavior follows its kind:
+huge runners chase (touch kill), huge shooters ambush, huge hunters patrol
+(the current Warden = bH1). Proposed stats:
 
-- Runners never drop anything (pure threat).
-- Shooters: designated carriers drop RED — 1 carrier from L5, 2 from L7,
-  3 from L34.
-- Hunters: designated carriers drop ORANGE from L13 — 1, 2 from L18,
-  3 from L38.
-- WHITE exists only in boss fights FROM LEVEL 30 (Wojtek, same day):
-  pre-placed arena pickup(s), 1 at L30, 2 from L40. Orange debuts in the
-  L10 boss arena (2 spares there; L20's arena carries 2 Orange too). Never dropped, never on regular maps. The boss itself
-  drops nothing; its escort follows normal carrier rules.
-- Map spares: Red tapers off (0 from L46); Orange appears L13 and grows to 5.
-- Every level starts with a full Red; pickups overwrite type + charge.
+| Lvl | Boss | Shield | Speed / aim |
+|-----|------|--------|-------------|
+| 10 | huge R1 | 14s | chase 72 |
+| 20 | huge S1 | 16s | aim 3.1s |
+| 30 | huge H1 (Warden) | 18s | patrol 35, approach 95, aim 0.8s |
+| 40 | huge R2 | 20s | chase 94 |
+| 50 | huge S2 | 22s | aim 2.2s |
+| 60 | huge H2 | 24s | patrol 35, approach 105, aim 0.65s |
+| 70 | huge R3 | 26s | chase 116 |
+| 80 | huge S3 | 28s | aim 1.5s |
+| 90 | huge H3 | 30s | patrol 35, approach 115, aim 0.5s |
+| 100 | huge R3 + huge S3 + huge H3 | 18s each | finale placeholder |
 
-## 50-level table (boss every 10th; same Warden for now)
+Rule of thumb: huge runners chase at ~55% of their tier's speed; huge
+shooters aim ~40% slower than their tier; huge hunters approach at ~50%.
 
-R/S/H tiers = counts; Red/Org/Wht = map-spare pickups; S→R / H→O = carrier
-drop counts. Boss arenas are deliberately small.
+## Battery sourcing
+
+- Runners never drop. Shooters carry Red (1 from L12, 2 from L15, 3 from
+  L51). Hunters carry Orange (1 from L23, 2 from L41, 3 from L71).
+- Orange debuts in the L10 boss arena; regular-map Orange spares from L21.
+- White is boss-arena-only, first at L30 (1), 2 from L60, 3 at L90, 4 at
+  L100.
+- Red map spares taper: 1 from L4, 2 from L7, 1 from L31, 0 from L61.
+
+## Introduction milestones
+
+R1 @1 · rocks @3 · Red spares @4 · mirrors @6 · **bR1 + Orange @10** ·
+S1 @11 · Red carriers @12 · **bS1 @20** · H1 @21 · Orange carriers @23 ·
+**bH1 + White @30** · R2 @31 · **bR2 @40** · S2 @41 · **bS2 @50** ·
+H2 @51 · **bH2 @60** · R3 @61 · **bR3 @70** · S3 @71 · **bS3 @80** ·
+H3 @81 · **bH3 @90** · everything @91 · **triple finale @100**.
+
+## The 100-level table
+
+Generated from the decade rules (regenerate: this table is data, not law —
+individual rows stay hand-tunable once in Levels.swift).
 
 | Lvl | Map | R1 | R2 | R3 | S1 | S2 | S3 | H1 | H2 | H3 | Boss | Rocks | Mirr | Red | Org | Wht | S→R | H→O |
 |----|-----|----|----|----|----|----|----|----|----|----|------|------|------|-----|-----|-----|-----|-----|
-| 1 | 1.0 | 2 | – | – | – | – | – | – | – | – | – | 0 | 0 | – | – | – | – | – |
-| 2 | 1.0 | 4 | – | – | – | – | – | – | – | – | – | 0 | 0 | – | – | – | – | – |
-| 3 | 1.0 | 3 | – | – | 1 | – | – | – | – | – | – | 3 | 0 | – | – | – | – | – |
-| 4 | 1.5 | 4 | – | – | 2 | – | – | – | – | – | – | 5 | 0 | 1 | – | – | – | – |
-| 5 | 1.5 | 5 | – | – | 2 | – | – | – | – | – | – | 6 | 0 | 1 | – | – | 1 | – |
-| 6 | 2.0 | 5 | – | – | 3 | – | – | – | – | – | – | 8 | 2 | 1 | – | – | 1 | – |
-| 7 | 2.0 | 6 | – | – | 3 | – | – | – | – | – | – | 9 | 3 | 1 | – | – | 2 | – |
-| 8 | 2.0 | 4 | 2 | – | 3 | – | – | – | – | – | – | 10 | 3 | 1 | – | – | 2 | – |
-| 9 | 2.0 | 4 | 3 | – | 4 | – | – | – | – | – | – | 11 | 4 | 1 | – | – | 2 | – |
-| 10 | 2.0 | 2 | – | – | – | – | – | – | – | – | W | 6 | 3 | 1 | 2 | – | – | – |
-| 11 | 2.0 | 4 | 2 | – | 3 | – | – | 1 | – | – | – | 10 | 4 | 1 | – | – | 2 | – |
-| 12 | 2.5 | 4 | 3 | – | 3 | – | – | 1 | – | – | – | 12 | 5 | 1 | – | – | 2 | – |
-| 13 | 2.5 | 4 | 3 | – | 3 | – | – | 2 | – | – | – | 12 | 5 | 1 | 1 | – | 2 | 1 |
-| 14 | 2.5 | 5 | 3 | – | 4 | – | – | 2 | – | – | – | 13 | 6 | 1 | 1 | – | 2 | 1 |
-| 15 | 2.5 | 4 | 4 | – | 2 | 2 | – | 2 | – | – | – | 13 | 6 | 1 | 1 | – | 2 | 1 |
-| 16 | 3.0 | 4 | 4 | – | 2 | 2 | – | 3 | – | – | – | 14 | 7 | 2 | 1 | – | 2 | 1 |
-| 17 | 3.0 | 4 | 5 | – | 2 | 3 | – | 3 | – | – | – | 14 | 7 | 2 | 1 | – | 2 | 1 |
-| 18 | 3.0 | 3 | 6 | – | 2 | 3 | – | 3 | – | – | – | 15 | 8 | 2 | 1 | – | 2 | 2 |
-| 19 | 3.0 | 3 | 6 | – | 2 | 4 | – | 4 | – | – | – | 15 | 8 | 2 | 1 | – | 2 | 2 |
-| 20 | 2.0 | – | 3 | – | – | – | – | 1 | – | – | W | 6 | 4 | – | 2 | – | – | 1 |
-| 21 | 3.0 | 3 | 5 | – | 2 | 4 | – | 3 | – | – | – | 15 | 8 | 2 | 1 | – | 2 | 1 |
-| 22 | 3.0 | 3 | 4 | 2 | 2 | 4 | – | 3 | – | – | – | 16 | 8 | 2 | 1 | – | 2 | 1 |
-| 23 | 3.0 | 2 | 5 | 2 | 2 | 4 | – | 3 | – | – | – | 16 | 9 | 2 | 1 | – | 2 | 1 |
-| 24 | 3.0 | 2 | 5 | 3 | 2 | 4 | – | 2 | 1 | – | – | 16 | 9 | 2 | 2 | – | 2 | 2 |
-| 25 | 3.0 | 2 | 5 | 3 | 2 | 5 | – | 2 | 2 | – | – | 17 | 9 | 2 | 2 | – | 2 | 2 |
-| 26 | 3.5 | 2 | 5 | 4 | 2 | 5 | – | 2 | 2 | – | – | 17 | 10 | 2 | 2 | – | 2 | 2 |
-| 27 | 3.5 | 2 | 4 | 5 | 1 | 5 | 1 | 2 | 2 | – | – | 18 | 10 | 2 | 2 | – | 2 | 2 |
-| 28 | 3.5 | 1 | 5 | 5 | 1 | 5 | 2 | 2 | 3 | – | – | 18 | 11 | 2 | 2 | – | 2 | 2 |
-| 29 | 3.5 | 1 | 5 | 6 | 1 | 5 | 2 | 2 | 3 | – | – | 18 | 11 | 2 | 2 | – | 2 | 2 |
-| 30 | 2.5 | – | – | 4 | – | – | – | – | 2 | – | W | 7 | 5 | – | 2 | 1 | – | 2 |
-| 31 | 3.5 | – | 6 | 4 | – | 5 | 2 | 1 | 3 | – | – | 18 | 11 | 2 | 2 | – | 2 | 2 |
-| 32 | 3.5 | – | 6 | 5 | – | 5 | 3 | 1 | 3 | – | – | 19 | 12 | 2 | 2 | – | 2 | 2 |
-| 33 | 3.5 | – | 5 | 6 | – | 5 | 3 | – | 3 | 1 | – | 19 | 12 | 1 | 2 | – | 2 | 2 |
-| 34 | 4.0 | – | 5 | 6 | – | 4 | 4 | – | 3 | 1 | – | 20 | 13 | 1 | 3 | – | 3 | 2 |
-| 35 | 4.0 | – | 5 | 7 | – | 4 | 4 | – | 3 | 2 | – | 20 | 13 | 1 | 3 | – | 3 | 2 |
-| 36 | 4.0 | – | 4 | 8 | – | 4 | 5 | – | 2 | 3 | – | 20 | 14 | 1 | 3 | – | 3 | 2 |
-| 37 | 4.0 | – | 4 | 8 | – | 3 | 6 | – | 2 | 3 | – | 21 | 14 | 1 | 3 | – | 3 | 2 |
-| 38 | 4.0 | – | 3 | 9 | – | 3 | 6 | – | 2 | 4 | – | 21 | 15 | 1 | 3 | – | 3 | 3 |
-| 39 | 4.0 | – | 3 | 10 | – | 3 | 7 | – | 2 | 4 | – | 22 | 15 | 1 | 3 | – | 3 | 3 |
-| 40 | 3.0 | – | – | 5 | – | – | – | – | – | 3 | W | 8 | 6 | – | 2 | 2 | – | 3 |
-| 41 | 4.0 | – | 2 | 10 | – | 2 | 7 | – | 1 | 5 | – | 22 | 15 | 1 | 3 | – | 3 | 3 |
-| 42 | 4.0 | – | 2 | 11 | – | 2 | 8 | – | 1 | 5 | – | 22 | 16 | 1 | 3 | – | 3 | 3 |
-| 43 | 4.0 | – | 2 | 11 | – | 2 | 8 | – | – | 6 | – | 23 | 16 | 1 | 4 | – | 3 | 3 |
-| 44 | 4.5 | – | 1 | 12 | – | 1 | 9 | – | – | 6 | – | 23 | 17 | 1 | 4 | – | 3 | 3 |
-| 45 | 4.5 | – | 1 | 12 | – | 1 | 9 | – | – | 7 | – | 24 | 17 | 1 | 4 | – | 3 | 3 |
-| 46 | 4.5 | – | – | 13 | – | – | 10 | – | – | 7 | – | 24 | 18 | – | 4 | – | 3 | 3 |
-| 47 | 4.5 | – | – | 14 | – | – | 10 | – | – | 8 | – | 25 | 18 | – | 4 | – | 3 | 3 |
-| 48 | 5.0 | – | – | 15 | – | – | 11 | – | – | 8 | – | 25 | 19 | – | 5 | – | 3 | 3 |
-| 49 | 5.0 | – | – | 16 | – | – | 12 | – | – | 9 | – | 26 | 19 | – | 5 | – | 3 | 3 |
-| 50 | 3.0 | – | – | 6 | – | – | 2 | – | – | 4 | W | 10 | 8 | – | 3 | 2 | – | 3 |
+| 1 | 1.0 | 2 | – | – | – | – | – | – | – | – | - | – | – | – | – | – | – | – |
+| 2 | 1.0 | 3 | – | – | – | – | – | – | – | – | - | – | – | – | – | – | – | – |
+| 3 | 1.0 | 4 | – | – | – | – | – | – | – | – | - | 3 | – | – | – | – | – | – |
+| 4 | 1.0 | 5 | – | – | – | – | – | – | – | – | - | 3 | – | 1 | – | – | – | – |
+| 5 | 1.0 | 6 | – | – | – | – | – | – | – | – | - | 3 | – | 1 | – | – | – | – |
+| 6 | 1.5 | 7 | – | – | – | – | – | – | – | – | - | 3 | 1 | 1 | – | – | – | – |
+| 7 | 1.5 | 8 | – | – | – | – | – | – | – | – | - | 4 | 1 | 2 | – | – | – | – |
+| 8 | 1.5 | 9 | – | – | – | – | – | – | – | – | - | 4 | 1 | 2 | – | – | – | – |
+| 9 | 1.5 | 10 | – | – | – | – | – | – | – | – | - | 4 | 1 | 2 | – | – | – | – |
+| 10 | 2.0 | 4 | – | – | – | – | – | – | – | – | bR1 | 6 | 3 | 1 | 3 | – | – | – |
+| 11 | 1.5 | 5 | – | – | 1 | – | – | – | – | – | - | 5 | 2 | 2 | – | – | – | – |
+| 12 | 1.5 | 5 | – | – | 1 | – | – | – | – | – | - | 5 | 2 | 2 | – | – | 1 | – |
+| 13 | 1.5 | 5 | – | – | 2 | – | – | – | – | – | - | 5 | 2 | 2 | – | – | 1 | – |
+| 14 | 1.5 | 6 | – | – | 2 | – | – | – | – | – | - | 5 | 2 | 2 | – | – | 1 | – |
+| 15 | 1.5 | 6 | – | – | 3 | – | – | – | – | – | - | 6 | 2 | 2 | – | – | 2 | – |
+| 16 | 2.0 | 6 | – | – | 3 | – | – | – | – | – | - | 6 | 3 | 2 | – | – | 2 | – |
+| 17 | 2.0 | 7 | – | – | 4 | – | – | – | – | – | - | 6 | 3 | 2 | – | – | 2 | – |
+| 18 | 2.0 | 7 | – | – | 4 | – | – | – | – | – | - | 6 | 3 | 2 | – | – | 2 | – |
+| 19 | 2.0 | 7 | – | – | 5 | – | – | – | – | – | - | 7 | 3 | 2 | – | – | 2 | – |
+| 20 | 2.0 | 5 | – | – | – | – | – | – | – | – | bS1 | 6 | 4 | 1 | 3 | – | – | – |
+| 21 | 2.0 | 5 | – | – | 3 | – | – | 1 | – | – | - | 7 | 4 | 2 | 1 | – | 2 | – |
+| 22 | 2.0 | 5 | – | – | 3 | – | – | 1 | – | – | - | 7 | 4 | 2 | 1 | – | 2 | – |
+| 23 | 2.0 | 5 | – | – | 3 | – | – | 1 | – | – | - | 8 | 4 | 2 | 1 | – | 2 | 1 |
+| 24 | 2.0 | 5 | – | – | 3 | – | – | 2 | – | – | - | 8 | 4 | 2 | 1 | – | 2 | 1 |
+| 25 | 2.0 | 5 | – | – | 3 | – | – | 2 | – | – | - | 8 | 4 | 2 | 1 | – | 2 | 1 |
+| 26 | 2.5 | 5 | – | – | 3 | – | – | 2 | – | – | - | 8 | 5 | 2 | 1 | – | 2 | 1 |
+| 27 | 2.5 | 5 | – | – | 3 | – | – | 3 | – | – | - | 9 | 5 | 2 | 1 | – | 2 | 1 |
+| 28 | 2.5 | 5 | – | – | 3 | – | – | 3 | – | – | - | 9 | 5 | 2 | 1 | – | 2 | 1 |
+| 29 | 2.5 | 5 | – | – | 3 | – | – | 3 | – | – | - | 9 | 5 | 2 | 1 | – | 2 | 1 |
+| 30 | 2.5 | 4 | – | – | 2 | – | – | 1 | – | – | bH1 | 7 | 5 | – | 3 | 1 | – | 1 |
+| 31 | 2.5 | 4 | 1 | – | 3 | – | – | 2 | – | – | - | 10 | 6 | 1 | 2 | – | 2 | 1 |
+| 32 | 2.5 | 4 | 1 | – | 3 | – | – | 2 | – | – | - | 10 | 6 | 1 | 2 | – | 2 | 1 |
+| 33 | 2.5 | 4 | 2 | – | 3 | – | – | 2 | – | – | - | 10 | 6 | 1 | 2 | – | 2 | 1 |
+| 34 | 2.5 | 4 | 2 | – | 3 | – | – | 2 | – | – | - | 10 | 6 | 1 | 2 | – | 2 | 1 |
+| 35 | 2.5 | 4 | 3 | – | 3 | – | – | 2 | – | – | - | 11 | 6 | 1 | 2 | – | 2 | 1 |
+| 36 | 2.5 | 4 | 3 | – | 3 | – | – | 2 | – | – | - | 11 | 7 | 1 | 2 | – | 2 | 1 |
+| 37 | 2.5 | 4 | 4 | – | 3 | – | – | 2 | – | – | - | 11 | 7 | 1 | 2 | – | 2 | 1 |
+| 38 | 2.5 | 4 | 4 | – | 3 | – | – | 2 | – | – | - | 11 | 7 | 1 | 2 | – | 2 | 1 |
+| 39 | 2.5 | 4 | 5 | – | 3 | – | – | 2 | – | – | - | 12 | 7 | 1 | 2 | – | 2 | 1 |
+| 40 | 2.5 | – | 3 | – | 2 | – | – | 1 | – | – | bR2 | 7 | 5 | – | 3 | 1 | – | 1 |
+| 41 | 3.0 | 4 | 4 | – | 2 | 1 | – | 2 | – | – | - | 12 | 8 | 1 | 2 | – | 2 | 2 |
+| 42 | 3.0 | 4 | 4 | – | 2 | 1 | – | 2 | – | – | - | 12 | 8 | 1 | 2 | – | 2 | 2 |
+| 43 | 3.0 | 4 | 4 | – | 2 | 2 | – | 2 | – | – | - | 13 | 8 | 1 | 2 | – | 2 | 2 |
+| 44 | 3.0 | 4 | 4 | – | 2 | 2 | – | 2 | – | – | - | 13 | 8 | 1 | 2 | – | 2 | 2 |
+| 45 | 3.0 | 4 | 4 | – | 2 | 3 | – | 2 | – | – | - | 13 | 8 | 1 | 2 | – | 2 | 2 |
+| 46 | 3.0 | 4 | 4 | – | 2 | 3 | – | 2 | – | – | - | 13 | 9 | 1 | 2 | – | 2 | 2 |
+| 47 | 3.0 | 4 | 4 | – | 2 | 4 | – | 2 | – | – | - | 14 | 9 | 1 | 2 | – | 2 | 2 |
+| 48 | 3.0 | 4 | 4 | – | 2 | 4 | – | 2 | – | – | - | 14 | 9 | 1 | 2 | – | 2 | 2 |
+| 49 | 3.0 | 4 | 4 | – | 2 | 5 | – | 2 | – | – | - | 14 | 9 | 1 | 2 | – | 2 | 2 |
+| 50 | 2.5 | 2 | 3 | – | – | 2 | – | 1 | – | – | bS2 | 8 | 6 | – | 3 | 1 | – | 1 |
+| 51 | 3.0 | 3 | 4 | – | 2 | 3 | – | 2 | 1 | – | - | 15 | 10 | 1 | 3 | – | 3 | 2 |
+| 52 | 3.0 | 3 | 4 | – | 2 | 3 | – | 2 | 1 | – | - | 15 | 10 | 1 | 3 | – | 3 | 2 |
+| 53 | 3.0 | 3 | 4 | – | 2 | 3 | – | 2 | 1 | – | - | 15 | 10 | 1 | 3 | – | 3 | 2 |
+| 54 | 3.0 | 3 | 4 | – | 2 | 3 | – | 2 | 2 | – | - | 15 | 10 | 1 | 3 | – | 3 | 2 |
+| 55 | 3.0 | 3 | 4 | – | 2 | 3 | – | 2 | 2 | – | - | 16 | 10 | 1 | 3 | – | 3 | 2 |
+| 56 | 3.5 | 3 | 4 | – | 2 | 3 | – | 2 | 2 | – | - | 16 | 11 | 1 | 3 | – | 3 | 2 |
+| 57 | 3.5 | 3 | 4 | – | 2 | 3 | – | 2 | 3 | – | - | 16 | 11 | 1 | 3 | – | 3 | 2 |
+| 58 | 3.5 | 3 | 4 | – | 2 | 3 | – | 2 | 3 | – | - | 16 | 11 | 1 | 3 | – | 3 | 2 |
+| 59 | 3.5 | 3 | 4 | – | 2 | 3 | – | 2 | 3 | – | - | 17 | 11 | 1 | 3 | – | 3 | 2 |
+| 60 | 3.0 | – | 4 | – | – | 2 | – | 1 | 1 | – | bH2 | 8 | 6 | – | 3 | 2 | – | 2 |
+| 61 | 3.5 | 3 | 3 | 1 | 2 | 3 | – | 1 | 2 | – | - | 17 | 12 | – | 3 | – | 3 | 2 |
+| 62 | 3.5 | 3 | 3 | 1 | 2 | 3 | – | 1 | 2 | – | - | 17 | 12 | – | 3 | – | 3 | 2 |
+| 63 | 3.5 | 3 | 3 | 2 | 2 | 3 | – | 1 | 2 | – | - | 18 | 12 | – | 3 | – | 3 | 2 |
+| 64 | 3.5 | 3 | 3 | 2 | 2 | 3 | – | 1 | 2 | – | - | 18 | 12 | – | 3 | – | 3 | 2 |
+| 65 | 3.5 | 3 | 3 | 3 | 2 | 3 | – | 1 | 2 | – | - | 18 | 12 | – | 3 | – | 3 | 2 |
+| 66 | 3.5 | 3 | 3 | 3 | 2 | 3 | – | 1 | 2 | – | - | 18 | 13 | – | 3 | – | 3 | 2 |
+| 67 | 3.5 | 3 | 3 | 4 | 2 | 3 | – | 1 | 2 | – | - | 19 | 13 | – | 3 | – | 3 | 2 |
+| 68 | 3.5 | 3 | 3 | 4 | 2 | 3 | – | 1 | 2 | – | - | 19 | 13 | – | 3 | – | 3 | 2 |
+| 69 | 3.5 | 3 | 3 | 5 | 2 | 3 | – | 1 | 2 | – | - | 19 | 13 | – | 3 | – | 3 | 2 |
+| 70 | 3.0 | – | 3 | 2 | – | 2 | – | – | 2 | – | bR3 | 9 | 7 | – | 3 | 2 | – | 2 |
+| 71 | 4.0 | 2 | 3 | 4 | 1 | 2 | 1 | 1 | 2 | – | - | 20 | 14 | – | 4 | – | 3 | 3 |
+| 72 | 4.0 | 2 | 3 | 4 | 1 | 2 | 1 | 1 | 2 | – | - | 20 | 14 | – | 4 | – | 3 | 3 |
+| 73 | 4.0 | 2 | 3 | 4 | 1 | 2 | 2 | 1 | 2 | – | - | 20 | 14 | – | 4 | – | 3 | 3 |
+| 74 | 4.0 | 2 | 3 | 4 | 1 | 2 | 2 | 1 | 2 | – | - | 20 | 14 | – | 4 | – | 3 | 3 |
+| 75 | 4.0 | 2 | 3 | 4 | 1 | 2 | 3 | 1 | 2 | – | - | 21 | 14 | – | 4 | – | 3 | 3 |
+| 76 | 4.0 | 2 | 3 | 4 | 1 | 2 | 3 | 1 | 2 | – | - | 21 | 15 | – | 4 | – | 3 | 3 |
+| 77 | 4.0 | 2 | 3 | 4 | 1 | 2 | 4 | 1 | 2 | – | - | 21 | 15 | – | 4 | – | 3 | 3 |
+| 78 | 4.0 | 2 | 3 | 4 | 1 | 2 | 4 | 1 | 2 | – | - | 21 | 15 | – | 4 | – | 3 | 3 |
+| 79 | 4.0 | 2 | 3 | 4 | 1 | 2 | 5 | 1 | 2 | – | - | 22 | 15 | – | 4 | – | 3 | 3 |
+| 80 | 3.0 | – | 2 | 3 | – | – | 2 | – | 2 | – | bS3 | 9 | 7 | – | 4 | 2 | – | 2 |
+| 81 | 4.5 | 2 | 2 | 4 | 1 | 2 | 3 | 1 | 1 | 1 | - | 22 | 16 | – | 4 | – | 3 | 3 |
+| 82 | 4.5 | 2 | 2 | 4 | 1 | 2 | 3 | 1 | 1 | 1 | - | 22 | 16 | – | 4 | – | 3 | 3 |
+| 83 | 4.5 | 2 | 2 | 4 | 1 | 2 | 3 | 1 | 1 | 1 | - | 23 | 16 | – | 4 | – | 3 | 3 |
+| 84 | 4.5 | 2 | 2 | 4 | 1 | 2 | 3 | 1 | 1 | 2 | - | 23 | 16 | – | 4 | – | 3 | 3 |
+| 85 | 4.5 | 2 | 2 | 4 | 1 | 2 | 3 | 1 | 1 | 2 | - | 23 | 16 | – | 4 | – | 3 | 3 |
+| 86 | 4.5 | 2 | 2 | 4 | 1 | 2 | 3 | 1 | 1 | 2 | - | 23 | 17 | – | 4 | – | 3 | 3 |
+| 87 | 4.5 | 2 | 2 | 4 | 1 | 2 | 3 | 1 | 1 | 3 | - | 24 | 17 | – | 4 | – | 3 | 3 |
+| 88 | 4.5 | 2 | 2 | 4 | 1 | 2 | 3 | 1 | 1 | 3 | - | 24 | 17 | – | 4 | – | 3 | 3 |
+| 89 | 4.5 | 2 | 2 | 4 | 1 | 2 | 3 | 1 | 1 | 3 | - | 24 | 17 | – | 4 | – | 3 | 3 |
+| 90 | 3.0 | – | – | 4 | – | – | 2 | – | 1 | 1 | bH3 | 10 | 8 | – | 4 | 3 | – | 2 |
+| 91 | 5.0 | 2 | 2 | 4 | 1 | 2 | 3 | 1 | 1 | 2 | - | 25 | 18 | – | 5 | – | 3 | 3 |
+| 92 | 5.0 | 2 | 2 | 4 | 1 | 2 | 3 | 1 | 1 | 2 | - | 25 | 18 | – | 5 | – | 3 | 3 |
+| 93 | 5.0 | 2 | 2 | 5 | 1 | 2 | 3 | 1 | 1 | 2 | - | 25 | 18 | – | 5 | – | 3 | 3 |
+| 94 | 5.0 | 2 | 2 | 5 | 1 | 2 | 4 | 1 | 1 | 3 | - | 25 | 18 | – | 5 | – | 3 | 3 |
+| 95 | 5.0 | 2 | 2 | 5 | 1 | 2 | 4 | 1 | 1 | 3 | - | 26 | 18 | – | 5 | – | 3 | 3 |
+| 96 | 5.0 | 2 | 2 | 6 | 1 | 2 | 4 | 1 | 1 | 3 | - | 26 | 19 | – | 5 | – | 3 | 3 |
+| 97 | 5.0 | 2 | 2 | 6 | 1 | 2 | 4 | 1 | 1 | 3 | - | 26 | 19 | – | 5 | – | 3 | 3 |
+| 98 | 5.0 | 2 | 2 | 6 | 1 | 2 | 5 | 1 | 1 | 4 | - | 26 | 19 | – | 5 | – | 3 | 3 |
+| 99 | 5.0 | 2 | 2 | 7 | 1 | 2 | 5 | 1 | 1 | 4 | - | 26 | 19 | – | 5 | – | 3 | 3 |
+| 100 | 3.5 | – | – | 4 | – | – | 2 | – | – | 2 | bR3+bS3+bH3 | 10 | 8 | – | 5 | 4 | – | 3 |
 
-Introduction milestones: Runner I @1 · Shooter I + rocks @3 · Red spares @4 ·
-Red carrier drops @5 · mirrors @6 · Runner II @8 · Boss + Orange @10 ·
-Hunter I @11 · Orange carriers @13 · Shooter II @15 · Runner III @22 · Hunter II @24 ·
-Shooter III @27 · Hunter III @33.
+## Implementation consequences
 
-Design shape: breather after every boss; tier mixes rotate downward-tier-out;
-maps grow 1.0 → 5.0 screens; boss arenas tight (2.0–3.0). Endgame budget
-check (L49): shield mass ≈ 22 red-seconds vs ≈ 44 red-seconds of supply —
-the same ~2× comfort ratio as the early game.
-
-## Implementation consequences (when approved)
-
-- `Levels.swift` becomes an explicit 50-row table: per-tier enemy counts,
-  rocks/mirrors, typed map spares, typed carrier counts, boss flag.
-- Shield/armor generalizes the hunter damage accumulator to all enemies;
-  battery power multiplies per-frame damage.
-- White beam: straight cast ignoring rocks/mirrors, hitting every hostile
-  crossed (suggestion — pending Wojtek's call).
-- Boss = hunter state machine with per-body parameter overrides + 3× size.
-- Battery pickups get types (color + HUD tint); charge+type overwrite on
-  pickup; full Red at level start.
-
-## Open questions for Wojtek
-
-1. White piercing enemies too (multi-kill along the line): keep or drop?
-2. All numbers are starting points for on-device tuning.
+- LevelConfig.count = 100; per-level boss spec becomes (kind, tier, count)
+  instead of a Warden flag; BossStats generalizes to per-kind/tier stats.
+- Huge runner = oversized runner body (speed override, big shield);
+  huge shooter = oversized shooter (own aim duration); huge hunter = the
+  existing boss path.
+- EnemyTiers.hunterShield[0] -> 0.
