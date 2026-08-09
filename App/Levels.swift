@@ -1,151 +1,150 @@
 import CoreGraphics
 
-/// Per-level tuning: map size and everything that populates it.
-///
-/// The game has 20 levels, interpolated from the 10 hand-tuned anchor rows
-/// below (every attribute lerps between neighboring anchors; integer counts
-/// round). Anchor 1 is level 1 and anchor 10 is level 20, so tuning an anchor
-/// reshapes the curve around it. Difficulty ramps by introducing one mechanic
-/// at a time — runners only, then a hidden shooter with its rock cover, then
-/// a growing map plus battery-carrying shooters, then mirrors and map spares —
-/// then piling on. On top of the counts, four axes tighten continuously:
-/// battery capacity 5s → 1s, runner speed 110 → 225 (player moves at 320),
-/// shooter aim telegraph 2.5s → 0.9s, and the mirror share of obstacles
-/// 0% → ~60% (mirrors punish stray shots, so more mirrors = harder).
-/// Anchor 7 (≈ level 13–14) matches the original pre-levels game.
-/// Spawn distances shrink on small maps where the original minimums
-/// wouldn't fit on a single screen.
+/// Battery types: fixed stats that never scale with level. Picking one up
+/// overwrites both the remaining charge AND the type; every level starts
+/// with a full Red. Difficulty comes from the enemy tier mix and the battery
+/// economy, not from shrinking capacity.
+enum BatteryType: Int, CaseIterable {
+    case red    // the classic laser
+    case orange // double power: kills shielded enemies twice as fast
+    case white  // quadruple power; flies straight through rocks, mirrors,
+                // and every enemy on the line (no reflection, no self-hit)
+
+    /// Seconds of firing time when full.
+    var capacity: Double { [3.0, 2.0, 1.0][rawValue] }
+    /// Damage multiplier vs shields (kill time = shield / power).
+    var power: Double { [1.0, 2.0, 4.0][rawValue] }
+    var piercing: Bool { self == .white }
+}
+
+/// Per-tier enemy attributes; index 0..2 = tier I..III. Shields are seconds
+/// of red-beam contact (kill time = shield / battery power; 0 = instant).
+enum EnemyTiers {
+    static let runnerSpeed = [130.0, 170.0, 210.0]
+    static let runnerShield = [0.0, 0.2, 0.45]
+    static let shooterAim = [2.2, 1.6, 1.1]
+    static let shooterShield = [0.0, 0.25, 0.5]
+    static let hunterApproach = [190.0, 210.0, 230.0]
+    static let hunterAim = [0.6, 0.5, 0.4]
+    static let hunterShield = [0.3, 0.6, 1.0]
+}
+
+/// The Warden — every 10th level's boss (more bosses later): hunter behavior
+/// at 3× size, slow, massively shielded. Red alone (3s) can't finish it;
+/// exactly one full Orange or 1s of White can.
+enum BossStats {
+    static let radius = 42.0
+    static let mass = 9.0
+    static let patrolSpeed = 35.0
+    static let approachSpeed = 100.0
+    static let aimDuration = 0.8
+    static let shield = 4.0
+}
+
+/// One level's composition. See
+/// docs/superpowers/specs/2026-08-09-tiers-batteries-bosses-plan.md for the
+/// full design table this encodes.
 struct LevelConfig {
     /// The map spans this many screens in each dimension.
     let mapScale: CGFloat
-    let runnerCount: Int
-    let shooterCount: Int
+    /// Per-tier counts, index 0..2 = tier I..III.
+    let runners: [Int]
+    let shooters: [Int]
+    let hunters: [Int]
+    let bossCount: Int
     let rockCount: Int
     let mirrorCount: Int
-    /// Shooters that drop a spare battery when killed.
-    let batteryDropCount: Int
-    /// Spare batteries lying on the map from the start.
-    let initialSpareBatteryCount: Int
-    let runnerMinPlayerDistance: Double
-    let shooterMinPlayerDistance: Double
-    /// Seconds of laser firing time per battery.
-    let laserCapacity: Double
-    /// Runner chase speed, points per second.
-    let runnerSpeed: Double
-    /// Seconds a shooter aims (green telegraph line) before the killing shot.
-    let telegraphDuration: Double
-    /// Patrolling armored hunters (see GameScene's hunter state machine).
-    /// Zero in every anchor for now — only the dev test level spawns them.
-    var hunterCount = 0
+    /// Map-spare battery pickups placed at level start.
+    let redSpares: Int
+    let orangeSpares: Int
+    let whiteSpares: Int
+    /// Designated carriers: shooters drop Red, hunters drop Orange.
+    let shooterRedCarriers: Int
+    let hunterOrangeCarriers: Int
 
-    static let anchors: [LevelConfig] = [
-        // 1: one runner on one screen — learn to steer and fire.
-        LevelConfig(mapScale: 1, runnerCount: 1, shooterCount: 0,
-                    rockCount: 0, mirrorCount: 0,
-                    batteryDropCount: 0, initialSpareBatteryCount: 0,
-                    runnerMinPlayerDistance: 260, shooterMinPlayerDistance: 220,
-                    laserCapacity: 5, runnerSpeed: 110, telegraphDuration: 2.5),
-        // 2: three runners, still nowhere to hide.
-        LevelConfig(mapScale: 1, runnerCount: 3, shooterCount: 0,
-                    rockCount: 0, mirrorCount: 0,
-                    batteryDropCount: 0, initialSpareBatteryCount: 0,
-                    runnerMinPlayerDistance: 260, shooterMinPlayerDistance: 220,
-                    laserCapacity: 4.2, runnerSpeed: 120, telegraphDuration: 2.3),
-        // 3: first shooter, hidden behind the first rocks.
-        LevelConfig(mapScale: 1, runnerCount: 3, shooterCount: 1,
-                    rockCount: 3, mirrorCount: 0,
-                    batteryDropCount: 0, initialSpareBatteryCount: 0,
-                    runnerMinPlayerDistance: 260, shooterMinPlayerDistance: 220,
-                    laserCapacity: 3.5, runnerSpeed: 130, telegraphDuration: 2.1),
-        // 4: the map opens up; first battery-carrying shooter.
-        LevelConfig(mapScale: 2, runnerCount: 4, shooterCount: 2,
-                    rockCount: 6, mirrorCount: 0,
-                    batteryDropCount: 1, initialSpareBatteryCount: 0,
-                    runnerMinPlayerDistance: 420, shooterMinPlayerDistance: 300,
-                    laserCapacity: 2.9, runnerSpeed: 140, telegraphDuration: 1.9),
-        // 5: mirrors appear (bounce shots, self-hit risk); first map spare.
-        LevelConfig(mapScale: 2, runnerCount: 5, shooterCount: 3,
-                    rockCount: 9, mirrorCount: 2,
-                    batteryDropCount: 1, initialSpareBatteryCount: 1,
-                    runnerMinPlayerDistance: 420, shooterMinPlayerDistance: 300,
-                    laserCapacity: 2.4, runnerSpeed: 150, telegraphDuration: 1.7),
-        LevelConfig(mapScale: 2, runnerCount: 6, shooterCount: 5,
-                    rockCount: 11, mirrorCount: 5,
-                    batteryDropCount: 2, initialSpareBatteryCount: 1,
-                    runnerMinPlayerDistance: 480, shooterMinPlayerDistance: 300,
-                    laserCapacity: 2, runnerSpeed: 160, telegraphDuration: 1.6),
-        // 7: the original game's counts and axis values.
-        LevelConfig(mapScale: 3, runnerCount: 8, shooterCount: 8,
-                    rockCount: 16, mirrorCount: 8,
-                    batteryDropCount: 2, initialSpareBatteryCount: 2,
-                    runnerMinPlayerDistance: 520, shooterMinPlayerDistance: 300,
-                    laserCapacity: 1.7, runnerSpeed: 170, telegraphDuration: 1.5),
-        LevelConfig(mapScale: 3, runnerCount: 10, shooterCount: 10,
-                    rockCount: 16, mirrorCount: 12,
-                    batteryDropCount: 2, initialSpareBatteryCount: 2,
-                    runnerMinPlayerDistance: 520, shooterMinPlayerDistance: 300,
-                    laserCapacity: 1.4, runnerSpeed: 185, telegraphDuration: 1.3),
-        LevelConfig(mapScale: 4, runnerCount: 12, shooterCount: 12,
-                    rockCount: 18, mirrorCount: 18,
-                    batteryDropCount: 3, initialSpareBatteryCount: 2,
-                    runnerMinPlayerDistance: 560, shooterMinPlayerDistance: 320,
-                    laserCapacity: 1.2, runnerSpeed: 205, telegraphDuration: 1.1),
-        // 10: the gauntlet — mirror-heavy, sprinting runners, snap shooters.
-        LevelConfig(mapScale: 4, runnerCount: 15, shooterCount: 14,
-                    rockCount: 16, mirrorCount: 26,
-                    batteryDropCount: 3, initialSpareBatteryCount: 3,
-                    runnerMinPlayerDistance: 560, shooterMinPlayerDistance: 320,
-                    laserCapacity: 1, runnerSpeed: 225, telegraphDuration: 0.9),
-    ]
+    /// Spawn distances derive from the map size (small maps can't honor the
+    /// big-map minimums).
+    var runnerMinPlayerDistance: Double { min(560, 200 + 120 * Double(mapScale)) }
+    var shooterMinPlayerDistance: Double { min(320, 160 + 60 * Double(mapScale)) }
 
-    static let count = 20
+    static let count = 50
 
-    /// Dev-only proving ground for the hunter, reachable as "level 0" from
-    /// the dev menu: a mid-size map with rocks to patrol around, mirrors to
-    /// bounce hunter beams, and nothing but hunters.
-    static let hunterTest = LevelConfig(
-        mapScale: 2, runnerCount: 0, shooterCount: 0,
-        rockCount: 8, mirrorCount: 6,
-        batteryDropCount: 0, initialSpareBatteryCount: 2,
-        runnerMinPlayerDistance: 400, shooterMinPlayerDistance: 300,
-        laserCapacity: 5, runnerSpeed: 150, telegraphDuration: 1.5,
-        hunterCount: 3)
-
-    /// Levels are 1-based; out-of-range values clamp to the nearest level.
-    /// Level 0 is the hunter test. Level n maps onto a fractional position
-    /// along the anchor rows and every attribute is interpolated between the
-    /// two neighboring anchors.
-    static func forLevel(_ level: Int) -> LevelConfig {
-        if level == 0 { return hunterTest }
-        let clamped = max(1, min(level, count))
-        let position = Double(clamped - 1) / Double(count - 1) * Double(anchors.count - 1)
-        let below = Int(position.rounded(.down))
-        let above = min(below + 1, anchors.count - 1)
-        return interpolate(anchors[below], anchors[above], t: position - Double(below))
+    /// Compact row builder: r/s/h are per-tier counts, spares is
+    /// [red, orange, white], carriers is [shooter→red, hunter→orange].
+    private static func row(_ map: Double, r: [Int], s: [Int], h: [Int],
+                            boss: Int = 0, rocks: Int, mirrors: Int,
+                            spares: [Int], carriers: [Int]) -> LevelConfig {
+        LevelConfig(mapScale: CGFloat(map), runners: r, shooters: s, hunters: h,
+                    bossCount: boss, rockCount: rocks, mirrorCount: mirrors,
+                    redSpares: spares[0], orangeSpares: spares[1],
+                    whiteSpares: spares[2],
+                    shooterRedCarriers: carriers[0],
+                    hunterOrangeCarriers: carriers[1])
     }
 
-    private static func interpolate(_ a: LevelConfig, _ b: LevelConfig,
-                                    t: Double) -> LevelConfig {
-        func lerp(_ x: Double, _ y: Double) -> Double { x + (y - x) * t }
-        func lerp(_ x: Int, _ y: Int) -> Int { Int(lerp(Double(x), Double(y)).rounded()) }
-        let shooters = lerp(a.shooterCount, b.shooterCount)
-        return LevelConfig(
-            mapScale: CGFloat(lerp(Double(a.mapScale), Double(b.mapScale))),
-            runnerCount: lerp(a.runnerCount, b.runnerCount),
-            shooterCount: shooters,
-            rockCount: lerp(a.rockCount, b.rockCount),
-            mirrorCount: lerp(a.mirrorCount, b.mirrorCount),
-            // Carriers are shooters, so drops can never exceed them.
-            batteryDropCount: min(lerp(a.batteryDropCount, b.batteryDropCount), shooters),
-            initialSpareBatteryCount: lerp(a.initialSpareBatteryCount,
-                                           b.initialSpareBatteryCount),
-            runnerMinPlayerDistance: lerp(a.runnerMinPlayerDistance,
-                                          b.runnerMinPlayerDistance),
-            shooterMinPlayerDistance: lerp(a.shooterMinPlayerDistance,
-                                           b.shooterMinPlayerDistance),
-            laserCapacity: lerp(a.laserCapacity, b.laserCapacity),
-            runnerSpeed: lerp(a.runnerSpeed, b.runnerSpeed),
-            telegraphDuration: lerp(a.telegraphDuration, b.telegraphDuration),
-            hunterCount: lerp(a.hunterCount, b.hunterCount))
+    /// Dev-only hunter proving ground ("level 0" in the dev grid).
+    static let hunterTest = row(2.0, r: [0, 0, 0], s: [0, 0, 0], h: [3, 0, 0],
+                                rocks: 8, mirrors: 6, spares: [1, 1, 0],
+                                carriers: [0, 1])
+
+    /// The 50 levels, straight from the design table: boss every 10th,
+    /// breather after each boss, tiers rotating in as lower tiers fade out.
+    static let all: [LevelConfig] = [
+        row(1.0, r: [2, 0, 0], s: [0, 0, 0], h: [0, 0, 0], rocks: 0, mirrors: 0, spares: [0, 0, 0], carriers: [0, 0]),
+        row(1.0, r: [4, 0, 0], s: [0, 0, 0], h: [0, 0, 0], rocks: 0, mirrors: 0, spares: [0, 0, 0], carriers: [0, 0]),
+        row(1.0, r: [3, 0, 0], s: [1, 0, 0], h: [0, 0, 0], rocks: 3, mirrors: 0, spares: [0, 0, 0], carriers: [0, 0]),
+        row(1.5, r: [4, 0, 0], s: [2, 0, 0], h: [0, 0, 0], rocks: 5, mirrors: 0, spares: [1, 0, 0], carriers: [0, 0]),
+        row(1.5, r: [5, 0, 0], s: [2, 0, 0], h: [0, 0, 0], rocks: 6, mirrors: 0, spares: [1, 0, 0], carriers: [1, 0]),
+        row(2.0, r: [5, 0, 0], s: [3, 0, 0], h: [0, 0, 0], rocks: 8, mirrors: 2, spares: [1, 0, 0], carriers: [1, 0]),
+        row(2.0, r: [6, 0, 0], s: [3, 0, 0], h: [0, 0, 0], rocks: 9, mirrors: 3, spares: [1, 0, 0], carriers: [2, 0]),
+        row(2.0, r: [4, 2, 0], s: [3, 0, 0], h: [0, 0, 0], rocks: 10, mirrors: 3, spares: [1, 0, 0], carriers: [2, 0]),
+        row(2.0, r: [4, 3, 0], s: [4, 0, 0], h: [0, 0, 0], rocks: 11, mirrors: 4, spares: [1, 0, 0], carriers: [2, 0]),
+        row(2.0, r: [2, 0, 0], s: [0, 0, 0], h: [0, 0, 0], boss: 1, rocks: 6, mirrors: 3, spares: [1, 0, 1], carriers: [0, 0]),
+        row(2.0, r: [4, 2, 0], s: [3, 0, 0], h: [1, 0, 0], rocks: 10, mirrors: 4, spares: [1, 0, 0], carriers: [2, 0]),
+        row(2.5, r: [4, 3, 0], s: [3, 0, 0], h: [1, 0, 0], rocks: 12, mirrors: 5, spares: [1, 0, 0], carriers: [2, 0]),
+        row(2.5, r: [4, 3, 0], s: [3, 0, 0], h: [2, 0, 0], rocks: 12, mirrors: 5, spares: [1, 1, 0], carriers: [2, 1]),
+        row(2.5, r: [5, 3, 0], s: [4, 0, 0], h: [2, 0, 0], rocks: 13, mirrors: 6, spares: [1, 1, 0], carriers: [2, 1]),
+        row(2.5, r: [4, 4, 0], s: [2, 2, 0], h: [2, 0, 0], rocks: 13, mirrors: 6, spares: [1, 1, 0], carriers: [2, 1]),
+        row(3.0, r: [4, 4, 0], s: [2, 2, 0], h: [3, 0, 0], rocks: 14, mirrors: 7, spares: [2, 1, 0], carriers: [2, 1]),
+        row(3.0, r: [4, 5, 0], s: [2, 3, 0], h: [3, 0, 0], rocks: 14, mirrors: 7, spares: [2, 1, 0], carriers: [2, 1]),
+        row(3.0, r: [3, 6, 0], s: [2, 3, 0], h: [3, 0, 0], rocks: 15, mirrors: 8, spares: [2, 1, 0], carriers: [2, 2]),
+        row(3.0, r: [3, 6, 0], s: [2, 4, 0], h: [4, 0, 0], rocks: 15, mirrors: 8, spares: [2, 1, 0], carriers: [2, 2]),
+        row(2.0, r: [0, 3, 0], s: [0, 0, 0], h: [1, 0, 0], boss: 1, rocks: 6, mirrors: 4, spares: [0, 1, 1], carriers: [0, 1]),
+        row(3.0, r: [3, 5, 0], s: [2, 4, 0], h: [3, 0, 0], rocks: 15, mirrors: 8, spares: [2, 1, 0], carriers: [2, 1]),
+        row(3.0, r: [3, 4, 2], s: [2, 4, 0], h: [3, 0, 0], rocks: 16, mirrors: 8, spares: [2, 1, 0], carriers: [2, 1]),
+        row(3.0, r: [2, 5, 2], s: [2, 4, 0], h: [3, 0, 0], rocks: 16, mirrors: 9, spares: [2, 1, 0], carriers: [2, 1]),
+        row(3.0, r: [2, 5, 3], s: [2, 4, 0], h: [2, 1, 0], rocks: 16, mirrors: 9, spares: [2, 2, 0], carriers: [2, 2]),
+        row(3.0, r: [2, 5, 3], s: [2, 5, 0], h: [2, 2, 0], rocks: 17, mirrors: 9, spares: [2, 2, 0], carriers: [2, 2]),
+        row(3.5, r: [2, 5, 4], s: [2, 5, 0], h: [2, 2, 0], rocks: 17, mirrors: 10, spares: [2, 2, 0], carriers: [2, 2]),
+        row(3.5, r: [2, 4, 5], s: [1, 5, 1], h: [2, 2, 0], rocks: 18, mirrors: 10, spares: [2, 2, 0], carriers: [2, 2]),
+        row(3.5, r: [1, 5, 5], s: [1, 5, 2], h: [2, 3, 0], rocks: 18, mirrors: 11, spares: [2, 2, 0], carriers: [2, 2]),
+        row(3.5, r: [1, 5, 6], s: [1, 5, 2], h: [2, 3, 0], rocks: 18, mirrors: 11, spares: [2, 2, 0], carriers: [2, 2]),
+        row(2.5, r: [0, 0, 4], s: [0, 0, 0], h: [0, 2, 0], boss: 1, rocks: 7, mirrors: 5, spares: [0, 2, 1], carriers: [0, 2]),
+        row(3.5, r: [0, 6, 4], s: [0, 5, 2], h: [1, 3, 0], rocks: 18, mirrors: 11, spares: [2, 2, 0], carriers: [2, 2]),
+        row(3.5, r: [0, 6, 5], s: [0, 5, 3], h: [1, 3, 0], rocks: 19, mirrors: 12, spares: [2, 2, 0], carriers: [2, 2]),
+        row(3.5, r: [0, 5, 6], s: [0, 5, 3], h: [0, 3, 1], rocks: 19, mirrors: 12, spares: [1, 2, 0], carriers: [2, 2]),
+        row(4.0, r: [0, 5, 6], s: [0, 4, 4], h: [0, 3, 1], rocks: 20, mirrors: 13, spares: [1, 3, 0], carriers: [3, 2]),
+        row(4.0, r: [0, 5, 7], s: [0, 4, 4], h: [0, 3, 2], rocks: 20, mirrors: 13, spares: [1, 3, 0], carriers: [3, 2]),
+        row(4.0, r: [0, 4, 8], s: [0, 4, 5], h: [0, 2, 3], rocks: 20, mirrors: 14, spares: [1, 3, 0], carriers: [3, 2]),
+        row(4.0, r: [0, 4, 8], s: [0, 3, 6], h: [0, 2, 3], rocks: 21, mirrors: 14, spares: [1, 3, 0], carriers: [3, 2]),
+        row(4.0, r: [0, 3, 9], s: [0, 3, 6], h: [0, 2, 4], rocks: 21, mirrors: 15, spares: [1, 3, 0], carriers: [3, 3]),
+        row(4.0, r: [0, 3, 10], s: [0, 3, 7], h: [0, 2, 4], rocks: 22, mirrors: 15, spares: [1, 3, 0], carriers: [3, 3]),
+        row(3.0, r: [0, 0, 5], s: [0, 0, 0], h: [0, 0, 3], boss: 1, rocks: 8, mirrors: 6, spares: [0, 2, 2], carriers: [0, 3]),
+        row(4.0, r: [0, 2, 10], s: [0, 2, 7], h: [0, 1, 5], rocks: 22, mirrors: 15, spares: [1, 3, 0], carriers: [3, 3]),
+        row(4.0, r: [0, 2, 11], s: [0, 2, 8], h: [0, 1, 5], rocks: 22, mirrors: 16, spares: [1, 3, 0], carriers: [3, 3]),
+        row(4.0, r: [0, 2, 11], s: [0, 2, 8], h: [0, 0, 6], rocks: 23, mirrors: 16, spares: [1, 4, 0], carriers: [3, 3]),
+        row(4.5, r: [0, 1, 12], s: [0, 1, 9], h: [0, 0, 6], rocks: 23, mirrors: 17, spares: [1, 4, 0], carriers: [3, 3]),
+        row(4.5, r: [0, 1, 12], s: [0, 1, 9], h: [0, 0, 7], rocks: 24, mirrors: 17, spares: [1, 4, 0], carriers: [3, 3]),
+        row(4.5, r: [0, 0, 13], s: [0, 0, 10], h: [0, 0, 7], rocks: 24, mirrors: 18, spares: [0, 4, 0], carriers: [3, 3]),
+        row(4.5, r: [0, 0, 14], s: [0, 0, 10], h: [0, 0, 8], rocks: 25, mirrors: 18, spares: [0, 4, 0], carriers: [3, 3]),
+        row(5.0, r: [0, 0, 15], s: [0, 0, 11], h: [0, 0, 8], rocks: 25, mirrors: 19, spares: [0, 5, 0], carriers: [3, 3]),
+        row(5.0, r: [0, 0, 16], s: [0, 0, 12], h: [0, 0, 9], rocks: 26, mirrors: 19, spares: [0, 5, 0], carriers: [3, 3]),
+        row(3.0, r: [0, 0, 6], s: [0, 0, 2], h: [0, 0, 4], boss: 1, rocks: 10, mirrors: 8, spares: [0, 3, 2], carriers: [0, 3]),
+    ]
+
+    /// Levels are 1-based; 0 is the hunter test; out-of-range clamps.
+    static func forLevel(_ level: Int) -> LevelConfig {
+        if level == 0 { return hunterTest }
+        return all[max(1, min(level, count)) - 1]
     }
 }

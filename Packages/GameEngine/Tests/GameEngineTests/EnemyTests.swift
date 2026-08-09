@@ -221,3 +221,21 @@ final class HunterTests: XCTestCase {
         XCTAssertEqual(body.position.x, 286, accuracy: 1e-6) // size - radius
     }
 }
+
+// MARK: - Per-runner speed overrides (tiers)
+
+final class RunnerSpeedOverrideTests: XCTestCase {
+    func testRunnerUsesOverrideSpeedWhenSet() {
+        let world = World(size: Vector2(800, 800))
+        world.addPlayer(at: Vector2(400, 700))
+        let fast = world.addRunner(at: Vector2(400, 100))
+        let slow = world.addRunner(at: Vector2(200, 100))
+        world.runnerSpeed = 100
+        world.runnerSpeedOverrides[fast] = 200
+        world.activateRunner(fast)
+        world.activateRunner(slow)
+        world.update(dt: 0.5)
+        XCTAssertEqual(world.body(withID: fast)!.position.y, 200, accuracy: 1)
+        XCTAssertLessThan(world.body(withID: slow)!.position.y, 160)
+    }
+}
