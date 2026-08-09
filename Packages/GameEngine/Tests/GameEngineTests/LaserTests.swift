@@ -87,3 +87,47 @@ final class LaserTests: XCTestCase {
         XCTAssertEqual(hit.point.y, 300, accuracy: 1e-6) // 200 + (200/2)*1
     }
 }
+
+// MARK: - Casting from arbitrary bodies (hunter beams)
+
+final class BodyOriginLaserTests: XCTestCase {
+    func testCastFromBodySkipsItselfAndHitsTargetInLine() {
+        let world = World(size: Vector2(800, 800))
+        world.addPlayer(at: Vector2(600, 400))
+        let hunter = world.addHunter(at: Vector2(200, 400), radius: 14)
+        let path = world.castLaserPath(from: hunter, through: Vector2(300, 400))
+        XCTAssertEqual(path?.bodyID, world.playerID)
+        XCTAssertEqual(path?.points.last?.x ?? 0, 584, accuracy: 1e-6) // player surface
+    }
+
+    func testCastFromBodyStopsAtRock() {
+        let world = World(size: Vector2(800, 800))
+        world.addPlayer(at: Vector2(600, 400))
+        let rock = world.addRock(at: Vector2(400, 400), radius: 30)
+        let hunter = world.addHunter(at: Vector2(200, 400), radius: 14)
+        let path = world.castLaserPath(from: hunter, through: Vector2(300, 400))
+        XCTAssertEqual(path?.bodyID, rock)
+    }
+
+    func testCastFromBodyReflectsOffMirrorToPlayer() {
+        let world = World(size: Vector2(800, 800))
+        world.addPlayer(at: Vector2(200, 600))
+        let hunter = world.addHunter(at: Vector2(200, 200), radius: 14)
+        // 45° mirror at (400, 200): beam fired along +x bounces up toward +y.
+        world.addMirror(from: Vector2(350, 150), to: Vector2(450, 250))
+        // The reflected ray runs up the x=400 line; put the player on it.
+        world.remove(bodyID: world.playerID!)
+        world.addPlayer(at: Vector2(400, 600))
+        let path = world.castLaserPath(from: hunter, through: Vector2(300, 200))
+        XCTAssertEqual(path?.bodyID, world.playerID)
+        XCTAssertEqual(path?.points.count, 3) // origin, bounce, hit
+    }
+
+    func testPlayerCastStillWorksViaDelegation() {
+        let world = World(size: Vector2(800, 800))
+        world.addPlayer(at: Vector2(200, 400))
+        let npc = world.addNPC(at: Vector2(600, 400))
+        let path = world.castLaserPath(through: Vector2(300, 400))
+        XCTAssertEqual(path?.bodyID, npc)
+    }
+}

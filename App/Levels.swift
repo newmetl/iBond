@@ -101,11 +101,11 @@ struct LevelConfig {
     static let count = 20
 
     /// Dev-only proving ground for the hunter, reachable as "level 0" from
-    /// the dev menu: a mid-size map with rocks to patrol around and nothing
-    /// but hunters.
+    /// the dev menu: a mid-size map with rocks to patrol around, mirrors to
+    /// bounce hunter beams, and nothing but hunters.
     static let hunterTest = LevelConfig(
         mapScale: 2, runnerCount: 0, shooterCount: 0,
-        rockCount: 8, mirrorCount: 2,
+        rockCount: 8, mirrorCount: 6,
         batteryDropCount: 0, initialSpareBatteryCount: 2,
         runnerMinPlayerDistance: 400, shooterMinPlayerDistance: 300,
         laserCapacity: 5, runnerSpeed: 150, telegraphDuration: 1.5,
