@@ -33,15 +33,15 @@ enum EnemyTiers {
 /// The Warden — every 10th level's boss (more bosses later): hunter behavior
 /// at 3× size, slow, massively shielded. Its three armor rings are its
 /// health bar: each ring covers a third of the shield and peels off
-/// (outermost first) as the shield burns. 9s of red beam = three full Red
-/// batteries; 4.5s of Orange; ~2.3s of White.
+/// (outermost first) as the shield burns. 18s of red beam — realistically
+/// Orange (9s) or White (4.5s) work; the arenas supply them.
 enum BossStats {
     static let radius = 42.0
     static let mass = 9.0
     static let patrolSpeed = 35.0
     static let approachSpeed = 100.0
     static let aimDuration = 0.8
-    static let shield = 9.0
+    static let shield = 18.0
 }
 
 /// One level's composition. See
@@ -102,7 +102,7 @@ struct LevelConfig {
         row(2.0, r: [6, 0, 0], s: [3, 0, 0], h: [0, 0, 0], rocks: 9, mirrors: 3, spares: [1, 0, 0], carriers: [2, 0]),
         row(2.0, r: [4, 2, 0], s: [3, 0, 0], h: [0, 0, 0], rocks: 10, mirrors: 3, spares: [1, 0, 0], carriers: [2, 0]),
         row(2.0, r: [4, 3, 0], s: [4, 0, 0], h: [0, 0, 0], rocks: 11, mirrors: 4, spares: [1, 0, 0], carriers: [2, 0]),
-        row(2.0, r: [2, 0, 0], s: [0, 0, 0], h: [0, 0, 0], boss: 1, rocks: 6, mirrors: 3, spares: [1, 2, 0], carriers: [0, 0]),
+        row(2.0, r: [4, 0, 0], s: [0, 0, 0], h: [0, 0, 0], boss: 1, rocks: 6, mirrors: 3, spares: [1, 3, 0], carriers: [0, 0]),
         row(2.0, r: [4, 2, 0], s: [3, 0, 0], h: [1, 0, 0], rocks: 10, mirrors: 4, spares: [1, 0, 0], carriers: [2, 0]),
         row(2.5, r: [4, 3, 0], s: [3, 0, 0], h: [1, 0, 0], rocks: 12, mirrors: 5, spares: [1, 0, 0], carriers: [2, 0]),
         row(2.5, r: [4, 3, 0], s: [3, 0, 0], h: [2, 0, 0], rocks: 12, mirrors: 5, spares: [1, 1, 0], carriers: [2, 1]),
@@ -112,7 +112,7 @@ struct LevelConfig {
         row(3.0, r: [4, 5, 0], s: [2, 3, 0], h: [3, 0, 0], rocks: 14, mirrors: 7, spares: [2, 1, 0], carriers: [2, 1]),
         row(3.0, r: [3, 6, 0], s: [2, 3, 0], h: [3, 0, 0], rocks: 15, mirrors: 8, spares: [2, 1, 0], carriers: [2, 2]),
         row(3.0, r: [3, 6, 0], s: [2, 4, 0], h: [4, 0, 0], rocks: 15, mirrors: 8, spares: [2, 1, 0], carriers: [2, 2]),
-        row(2.0, r: [0, 3, 0], s: [0, 0, 0], h: [1, 0, 0], boss: 1, rocks: 6, mirrors: 4, spares: [0, 2, 0], carriers: [0, 1]),
+        row(2.0, r: [0, 3, 0], s: [0, 0, 0], h: [1, 0, 0], boss: 1, rocks: 6, mirrors: 4, spares: [0, 3, 0], carriers: [0, 1]),
         row(3.0, r: [3, 5, 0], s: [2, 4, 0], h: [3, 0, 0], rocks: 15, mirrors: 8, spares: [2, 1, 0], carriers: [2, 1]),
         row(3.0, r: [3, 4, 2], s: [2, 4, 0], h: [3, 0, 0], rocks: 16, mirrors: 8, spares: [2, 1, 0], carriers: [2, 1]),
         row(3.0, r: [2, 5, 2], s: [2, 4, 0], h: [3, 0, 0], rocks: 16, mirrors: 9, spares: [2, 1, 0], carriers: [2, 1]),
