@@ -135,7 +135,8 @@ struct GameView: View {
                 .font(.caption.bold())
                 .foregroundStyle(.white.opacity(0.5))
             ForEach([(ControlScheme.joystick, "Joystick + Button"),
-                     (ControlScheme.tap, "Tap to Move & Fire")], id: \.0) { scheme, label in
+                     (ControlScheme.tap, "Tap to Move & Fire"),
+                     (ControlScheme.stickAndTap, "Stick + Tap Fire")], id: \.0) { scheme, label in
                 Button(label) {
                     controlSchemeRaw = scheme.rawValue
                 }

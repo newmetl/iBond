@@ -66,6 +66,11 @@ xcrun devicectl device process launch --device C3A2910A-B2BA-57B7-9A72-A21E30126
 
 ## Simulator verification toolkit
 
+- Since 2026-08-09: Wojtek playtests every change himself on device — a clean
+  build + deploy is sufficient verification for app-layer changes. Skip
+  simulator staging patches, injected-gesture tests, and video/frame checks
+  unless he explicitly asks for them.
+
 - iOS Simulator MCP tools: launch/tap/touch_path/touch2_path/screenshot.
   Injected gestures have 1–3s latency and touch2_path delivers discrete
   press/release pairs (role assignment can flip per pair) — timed screenshots
