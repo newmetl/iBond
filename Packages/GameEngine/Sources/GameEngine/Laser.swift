@@ -32,8 +32,15 @@ public extension World {
     /// mirrors, until it hits a body, exits the bounds, or runs out of bounces.
     /// Returns nil when there is no player or `aim` is the player's center.
     func castLaserPath(through aim: Vector2) -> LaserPath? {
-        guard let pid = playerID, let player = body(withID: pid) else { return nil }
-        var origin = player.position
+        guard let pid = playerID else { return nil }
+        return castLaserPath(from: pid, through: aim)
+    }
+
+    /// Like `castLaserPath(through:)` but fired from any body's center (hunter
+    /// beams). Returns nil when the body is missing or `aim` is its center.
+    func castLaserPath(from originID: BodyID, through aim: Vector2) -> LaserPath? {
+        guard let originBody = body(withID: originID) else { return nil }
+        var origin = originBody.position
         let toAim = aim - origin
         guard toAim.length > .ulpOfOne else { return nil }
         var direction = toAim.normalized
@@ -43,10 +50,10 @@ public extension World {
         while true {
             var bodyT = Double.infinity
             var bodyHit: BodyID?
-            // The first segment starts inside the player's own circle, so the
-            // player is excluded there — but a reflected segment CAN hit the
-            // player (self-hit is the app's game-over case).
-            for body in bodies where body.id != pid || bounces > 0 {
+            // The first segment starts inside the origin's own circle, so the
+            // origin is excluded there — but a reflected segment CAN hit it
+            // (a player self-hit is the app's game-over case).
+            for body in bodies where body.id != originID || bounces > 0 {
                 if let t = Self.rayCircleIntersection(origin: origin, direction: direction,
                                                       center: body.position, radius: body.radius),
                    t < bodyT {

@@ -1008,9 +1008,17 @@ final class GameScene: SKScene {
 
     /// The lethal green flash a shooter leaves on screen when it fires.
     private func fireShooterBeam(from: Vector2, to: Vector2) {
+        fireShooterBeam(along: [from, to])
+    }
+
+    /// Polyline variant for hunter shots, which can bounce off mirrors.
+    private func fireShooterBeam(along points: [Vector2]) {
+        guard let first = points.first else { return }
         let path = CGMutablePath()
-        path.move(to: CGPoint(x: from.x, y: from.y))
-        path.addLine(to: CGPoint(x: to.x, y: to.y))
+        path.move(to: CGPoint(x: first.x, y: first.y))
+        for point in points.dropFirst() {
+            path.addLine(to: CGPoint(x: point.x, y: point.y))
+        }
         // Same thin crisp look as the player's beam, just green.
         let beam = SKShapeNode(path: path)
         beam.strokeColor = SKColor(red: 0.25, green: 1, blue: 0.4, alpha: 1)
@@ -1077,17 +1085,23 @@ final class GameScene: SKScene {
 
             case .aim(let target, let start):
                 world.setVelocity(.zero, forBodyID: id)
-                if let aim = hunterAimNodes[id] {
+                // The telegraph is a light beam: cast the actual laser path,
+                // so it continues past a dodged player and bounces off
+                // mirrors exactly like the shot will.
+                if let aim = hunterAimNodes[id],
+                   let beam = world.castLaserPath(from: id, through: target),
+                   beam.points.count >= 2 {
                     let path = CGMutablePath()
-                    path.move(to: CGPoint(x: body.position.x, y: body.position.y))
-                    path.addLine(to: CGPoint(x: target.x, y: target.y))
+                    path.move(to: CGPoint(x: beam.points[0].x, y: beam.points[0].y))
+                    for point in beam.points.dropFirst() {
+                        path.addLine(to: CGPoint(x: point.x, y: point.y))
+                    }
                     aim.path = path
                     aim.isHidden = false
                 }
                 if currentTime - start >= hunterAimDuration {
                     hunterAimNodes[id]?.isHidden = true
-                    fireHunterShot(from: body, lockedTarget: target,
-                                   player: player, world: world)
+                    fireHunterShot(from: body, lockedTarget: target, world: world)
                     guard gameStarted else { return } // the shot connected
                     mode = noticed ? .approach(until: currentTime + hunterApproachDuration)
                                    : .patrol(direction: .zero, until: 0)
@@ -1097,21 +1111,16 @@ final class GameScene: SKScene {
         }
     }
 
-    /// The hunter's shot: a straight ray through the locked aim point. Hits
-    /// only if the player's circle sits on that ray with clear line of sight
-    /// — dodging sideways during the 500ms aim makes it miss.
+    /// The hunter's shot: the real laser cast along the locked direction —
+    /// reflected by mirrors, stopped by rocks. It kills only if the beam's
+    /// final segment strikes the player; dodging during the aim makes it
+    /// miss (and the beam visibly continues past where you stood).
     private func fireHunterShot(from hunter: CircleBody, lockedTarget: Vector2,
-                                player: CircleBody, world: World) {
-        let direction = lockedTarget - hunter.position
-        guard direction.length > 1 else { return }
-        let dir = direction.normalized
-        let toPlayer = player.position - hunter.position
-        let along = toPlayer.dot(dir)
-        let perpendicular = (toPlayer - dir * along).length
-        let beamLength = max(along + 300, 500)
-        fireShooterBeam(from: hunter.position, to: hunter.position + dir * beamLength)
-        if along > 0, perpendicular <= player.radius + 2,
-           world.hasLineOfSight(from: hunter.id, to: player.id) {
+                                world: World) {
+        guard let beam = world.castLaserPath(from: hunter.id, through: lockedTarget),
+              beam.points.count >= 2 else { return }
+        fireShooterBeam(along: beam.points)
+        if beam.bodyID == world.playerID {
             killPlayer()
         }
     }
