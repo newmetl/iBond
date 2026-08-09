@@ -10,6 +10,10 @@ enum ControlScheme: String {
     /// double tap fires a burst at it, double tap + hold keeps firing at
     /// the finger.
     case tap
+    /// Joystick (lower-left) steers; no fire button — a single tap anywhere
+    /// else fires a burst at the tapped position, tap + hold keeps firing
+    /// at the finger.
+    case stickAndTap
 }
 
 final class GameScene: SKScene {
@@ -405,9 +409,9 @@ final class GameScene: SKScene {
         addChild(spark)
         sparkNode = spark
 
-        // On-screen controls exist only in the joystick scheme; the tap
-        // scheme plays on a clean screen.
-        if controlScheme == .joystick {
+        // The joystick exists in every scheme except pure tap; the fire
+        // button only in the classic joystick scheme.
+        if controlScheme != .tap {
             // Virtual joystick, pinned to the camera's lower-left corner.
             let base = SKShapeNode(circleOfRadius: joystickRadius)
             base.fillColor = SKColor(white: 1, alpha: 0.05)
@@ -425,15 +429,17 @@ final class GameScene: SKScene {
             base.addChild(knob)
             joystickKnob = knob
 
-            // Fire button, pinned to the camera's lower-right corner.
-            let fire = SKShapeNode(circleOfRadius: fireButtonRadius)
-            fire.fillColor = SKColor(red: 1, green: 0.25, blue: 0.3, alpha: 0.22)
-            fire.strokeColor = SKColor(red: 1, green: 0.4, blue: 0.4, alpha: 0.6)
-            fire.lineWidth = 2
-            fire.position = fireButtonCenter
-            fire.zPosition = 3
-            camera.addChild(fire)
-            fireButton = fire
+            if controlScheme == .joystick {
+                // Fire button, pinned to the camera's lower-right corner.
+                let fire = SKShapeNode(circleOfRadius: fireButtonRadius)
+                fire.fillColor = SKColor(red: 1, green: 0.25, blue: 0.3, alpha: 0.22)
+                fire.strokeColor = SKColor(red: 1, green: 0.4, blue: 0.4, alpha: 0.6)
+                fire.lineWidth = 2
+                fire.position = fireButtonCenter
+                fire.zPosition = 3
+                camera.addChild(fire)
+                fireButton = fire
+            }
         }
 
         // Battery HUD (rides the camera): icon with a color-coded charge bar;
@@ -623,22 +629,34 @@ final class GameScene: SKScene {
     // MARK: - Input
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard controlScheme == .joystick else {
-            tapSchemeTouchesBegan(touches)
-            return
-        }
-        for touch in touches {
-            if isInSteeringZone(touch) {
-                if touchController.began(touch, as: .joystick) {
-                    updateJoystick(with: touch)
+        switch controlScheme {
+        case .joystick:
+            for touch in touches {
+                if isInSteeringZone(touch) {
+                    if touchController.began(touch, as: .joystick) {
+                        updateJoystick(with: touch)
+                    }
+                } else if isInFireZone(touch) {
+                    if touchController.began(touch, as: .fire) {
+                        fireButtonHeld = true
+                        fireButton?.fillColor = SKColor(red: 1, green: 0.25, blue: 0.3, alpha: 0.45)
+                    }
                 }
-            } else if isInFireZone(touch) {
-                if touchController.began(touch, as: .fire) {
-                    fireButtonHeld = true
-                    fireButton?.fillColor = SKColor(red: 1, green: 0.25, blue: 0.3, alpha: 0.45)
+                // Touches on the map itself do nothing.
+            }
+        case .tap:
+            tapSchemeTouchesBegan(touches)
+        case .stickAndTap:
+            // Joystick steers; any touch outside its zone fires.
+            for touch in touches {
+                if isInSteeringZone(touch) {
+                    if touchController.began(touch, as: .joystick) {
+                        updateJoystick(with: touch)
+                    }
+                } else {
+                    beginFireTouch(touch)
                 }
             }
-            // Touches on the map itself do nothing.
         }
     }
 
@@ -649,36 +667,43 @@ final class GameScene: SKScene {
     private func tapSchemeTouchesBegan(_ touches: Set<UITouch>) {
         guard gameStarted, let world else { return }
         for touch in touches {
-            let location = touch.location(in: self)
             if touch.tapCount >= 2 {
-                world.moveTarget = nil
-                fireTouch = touch
-                fireTarget = location
-                burstEndTime = (lastUpdateTime ?? 0) + tapBurstDuration
-                // Snap the aim so even the shortest burst leaves in the
-                // tapped direction; finger tracking then smooths.
-                if let player = world.playerID.flatMap({ world.body(withID: $0) }) {
-                    let dx = location.x - player.position.x
-                    let dy = location.y - player.position.y
-                    if dx * dx + dy * dy > 1 {
-                        playerNode?.zRotation = atan2(dy, dx)
-                    }
-                }
+                beginFireTouch(touch)
             } else if fireTouch == nil {
+                let location = touch.location(in: self)
                 world.moveTarget = Vector2(location.x, location.y)
             }
         }
     }
 
-    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        if controlScheme == .tap {
-            for touch in touches where touch === fireTouch {
-                fireTarget = touch.location(in: self)
+    /// Starts firing at the touch: cancels any pending walk, snaps the aim so
+    /// even the shortest burst leaves in the tapped direction (finger
+    /// tracking then smooths), and opens the minimum burst window.
+    private func beginFireTouch(_ touch: UITouch) {
+        guard gameStarted, let world else { return }
+        let location = touch.location(in: self)
+        world.moveTarget = nil
+        fireTouch = touch
+        fireTarget = location
+        burstEndTime = (lastUpdateTime ?? 0) + tapBurstDuration
+        if let player = world.playerID.flatMap({ world.body(withID: $0) }) {
+            let dx = location.x - player.position.x
+            let dy = location.y - player.position.y
+            if dx * dx + dy * dy > 1 {
+                playerNode?.zRotation = atan2(dy, dx)
             }
-            return
         }
-        for touch in touches where touchController.role(of: touch) == .joystick {
-            updateJoystick(with: touch)
+    }
+
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        // Roles make this scheme-agnostic: a touch is the fire finger, a
+        // joystick finger, or nothing.
+        for touch in touches {
+            if touch === fireTouch {
+                fireTarget = touch.location(in: self)
+            } else if touchController.role(of: touch) == .joystick {
+                updateJoystick(with: touch)
+            }
         }
     }
 
@@ -743,13 +768,11 @@ final class GameScene: SKScene {
     }
 
     private func endTouches(_ touches: Set<UITouch>) {
-        if controlScheme == .tap {
-            for touch in touches where touch === fireTouch {
-                fireTouch = nil // the burst window may keep firing briefly
-            }
-            return
-        }
         for touch in touches {
+            if touch === fireTouch {
+                fireTouch = nil // the burst window may keep firing briefly
+                continue
+            }
             switch touchController.ended(touch) {
             case .joystick:
                 world?.playerControlVelocity = nil
@@ -770,15 +793,17 @@ final class GameScene: SKScene {
     private var firingRequested: Bool {
         switch controlScheme {
         case .joystick: return fireButtonHeld
-        case .tap: return fireTouch != nil || (lastUpdateTime ?? 0) < burstEndTime
+        case .tap, .stickAndTap:
+            return fireTouch != nil || (lastUpdateTime ?? 0) < burstEndTime
         }
     }
 
     private func processLaser() {
         guard let world else { return }
-        // Tap scheme: steer the aim toward the finger every frame (the
-        // double-tap snapped it initially; this tracks drags smoothly).
-        if controlScheme == .tap, firingRequested,
+        // Tap-fire schemes: steer the aim toward the finger every frame (the
+        // fire tap snapped it initially; this tracks drags smoothly and
+        // overrides the movement-derived facing while firing).
+        if controlScheme != .joystick, firingRequested,
            let player = world.playerID.flatMap({ world.body(withID: $0) }) {
             let dx = fireTarget.x - CGFloat(player.position.x)
             let dy = fireTarget.y - CGFloat(player.position.y)
