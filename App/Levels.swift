@@ -34,6 +34,9 @@ struct LevelConfig {
     let runnerSpeed: Double
     /// Seconds a shooter aims (green telegraph line) before the killing shot.
     let telegraphDuration: Double
+    /// Patrolling armored hunters (see GameScene's hunter state machine).
+    /// Zero in every anchor for now — only the dev test level spawns them.
+    var hunterCount = 0
 
     static let anchors: [LevelConfig] = [
         // 1: one runner on one screen — learn to steer and fire.
@@ -97,10 +100,23 @@ struct LevelConfig {
 
     static let count = 20
 
+    /// Dev-only proving ground for the hunter, reachable as "level 0" from
+    /// the dev menu: a mid-size map with rocks to patrol around and nothing
+    /// but hunters.
+    static let hunterTest = LevelConfig(
+        mapScale: 2, runnerCount: 0, shooterCount: 0,
+        rockCount: 8, mirrorCount: 2,
+        batteryDropCount: 0, initialSpareBatteryCount: 2,
+        runnerMinPlayerDistance: 400, shooterMinPlayerDistance: 300,
+        laserCapacity: 5, runnerSpeed: 150, telegraphDuration: 1.5,
+        hunterCount: 3)
+
     /// Levels are 1-based; out-of-range values clamp to the nearest level.
-    /// Level n maps onto a fractional position along the anchor rows and
-    /// every attribute is interpolated between the two neighboring anchors.
+    /// Level 0 is the hunter test. Level n maps onto a fractional position
+    /// along the anchor rows and every attribute is interpolated between the
+    /// two neighboring anchors.
     static func forLevel(_ level: Int) -> LevelConfig {
+        if level == 0 { return hunterTest }
         let clamped = max(1, min(level, count))
         let position = Double(clamped - 1) / Double(count - 1) * Double(anchors.count - 1)
         let below = Int(position.rounded(.down))
@@ -129,6 +145,7 @@ struct LevelConfig {
                                            b.shooterMinPlayerDistance),
             laserCapacity: lerp(a.laserCapacity, b.laserCapacity),
             runnerSpeed: lerp(a.runnerSpeed, b.runnerSpeed),
-            telegraphDuration: lerp(a.telegraphDuration, b.telegraphDuration))
+            telegraphDuration: lerp(a.telegraphDuration, b.telegraphDuration),
+            hunterCount: lerp(a.hunterCount, b.hunterCount))
     }
 }

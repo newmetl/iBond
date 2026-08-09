@@ -85,6 +85,26 @@ final class GameScene: SKScene {
 
     private let mirrorHalfLength: Double = 70
 
+    /// Hunter (patrolling armored shooter): ambles until it notices the
+    /// player, then loops run-closer → aim 500ms at a locked point → shoot.
+    /// The locked aim makes the shot dodgeable; armor means a single minimum
+    /// burst (0.2s) can't kill it.
+    private let hunterPatrolSpeed: Double = 55
+    private let hunterApproachSpeed: Double = 200
+    private let hunterApproachDuration: TimeInterval = 0.6
+    private let hunterAimDuration: TimeInterval = 0.5
+    /// Cumulative seconds of beam contact needed to burn through the armor.
+    private let hunterArmorSeconds: Double = 0.3
+
+    private enum HunterMode {
+        case patrol(direction: Vector2, until: TimeInterval)
+        case approach(until: TimeInterval)
+        case aim(target: Vector2, start: TimeInterval)
+    }
+    private var hunterModes: [BodyID: HunterMode] = [:]
+    private var hunterDamage: [BodyID: Double] = [:]
+    private var hunterAimNodes: [BodyID: SKShapeNode] = [:]
+
     private let touchController = TouchController()
     private var fireButtonHeld = false
 
@@ -107,7 +127,7 @@ final class GameScene: SKScene {
     private var batteryHUDNode: SKNode?
     private var batteryFillBar: SKSpriteNode?
     private var enemyDotsNode: SKNode?
-    private var lastEnemyDotCounts: (shooters: Int, runners: Int) = (-1, -1)
+    private var lastEnemyDotCounts: (shooters: Int, hunters: Int, runners: Int) = (-1, -1, -1)
     private var frameDt: Double = 0   // last frame's clamped wall-clock dt
     private var beamVisible = false   // tracks show/fade state of beam + spark
 
@@ -160,6 +180,7 @@ final class GameScene: SKScene {
         activateVisibleRunners()
         processLaser()
         processShooters(currentTime)
+        processHunters(currentTime)
         checkRunnerTouches()
         checkBatteryPickups()
         updateBatteryHUD()
@@ -171,7 +192,10 @@ final class GameScene: SKScene {
     private func updateSounds() {
         let sound = SoundManager.shared
         sound.setLaserFiring(beamVisible)
-        sound.setShooterAiming(gameStarted && !shooterAimStart.isEmpty)
+        let hunterAiming = hunterModes.values.contains {
+            if case .aim = $0 { return true } else { return false }
+        }
+        sound.setShooterAiming(gameStarted && (!shooterAimStart.isEmpty || hunterAiming))
         let chasing = gameStarted && world.map { w in
             w.bodies.contains { $0.kind == .runner && w.activeRunnerIDs.contains($0.id) }
         } == true
@@ -216,11 +240,14 @@ final class GameScene: SKScene {
         batteryHUDNode = nil
         batteryFillBar = nil
         enemyDotsNode = nil
-        lastEnemyDotCounts = (-1, -1)
+        lastEnemyDotCounts = (-1, -1, -1)
         laserCharge = config.laserCapacity
         beamVisible = false
         shooterAimStart = [:]
         shooterAimNodes = [:]
+        hunterModes = [:]
+        hunterDamage = [:]
+        hunterAimNodes = [:]
         batteryCarrierIDs = []
         batteryPickups = []
         gameStarted = true
@@ -295,6 +322,17 @@ final class GameScene: SKScene {
             placedRunners += 1
         }
 
+        // Hunters patrol from anywhere runner-distance away from the spawn.
+        var placedHunters = 0
+        attempts = 0
+        while placedHunters < config.hunterCount, attempts < 300 {
+            attempts += 1
+            guard let position = world.randomFreePosition(radius: npcRadius, using: &rng),
+                  position.distance(to: playerStart) > config.runnerMinPlayerDistance else { continue }
+            world.addHunter(at: position, radius: npcRadius)
+            placedHunters += 1
+        }
+
         self.world = world
         buildNodes(for: world)
 
@@ -349,9 +387,15 @@ final class GameScene: SKScene {
         playerNode = player
 
         for body in world.bodies where body.kind.isHostile {
-            let fill: SKColor = body.kind == .runner
-                ? SKColor(red: 0.75, green: 0.42, blue: 1, alpha: 1)  // purple: chases
-                : SKColor(red: 1, green: 0.45, blue: 0.35, alpha: 1)  // red: shoots
+            let fill: SKColor
+            switch body.kind {
+            case .runner:
+                fill = SKColor(red: 0.75, green: 0.42, blue: 1, alpha: 1)  // purple: chases
+            case .hunter:
+                fill = SKColor(red: 1, green: 0.62, blue: 0.15, alpha: 1)  // orange: patrols+shoots
+            default:
+                fill = SKColor(red: 1, green: 0.45, blue: 0.35, alpha: 1)  // red: shoots
+            }
             let node = makeCircleNode(radius: body.radius, fill: fill)
             node.zPosition = 0
             // Facing line: shows where the enemy aims (shooter) or runs (runner).
@@ -374,6 +418,17 @@ final class GameScene: SKScene {
             aim.zPosition = -0.5
             addChild(aim)
             shooterAimNodes[body.id] = aim
+        }
+
+        // Hunter telegraphs: an orange line locked to the aimed point.
+        for body in world.bodies where body.kind == .hunter {
+            let aim = SKShapeNode()
+            aim.strokeColor = SKColor(red: 1, green: 0.7, blue: 0.25, alpha: 0.4)
+            aim.lineWidth = 1
+            aim.isHidden = true
+            aim.zPosition = -0.5
+            addChild(aim)
+            hunterAimNodes[body.id] = aim
         }
 
         for body in world.bodies where body.kind == .rock {
@@ -471,7 +526,7 @@ final class GameScene: SKScene {
         batteryFillBar = fill
 
         // Current level, to the left of the battery icon.
-        let levelLabel = SKLabelNode(text: "LVL \(level)")
+        let levelLabel = SKLabelNode(text: level == 0 ? "TEST" : "LVL \(level)")
         levelLabel.fontName = "HelveticaNeue-Bold"
         levelLabel.fontSize = 13
         levelLabel.fontColor = SKColor(white: 1, alpha: 0.85)
@@ -488,20 +543,23 @@ final class GameScene: SKScene {
     }
 
     /// Rebuilds the HUD dot row whenever the remaining-enemy counts change:
-    /// red dots for shooters, purple for runners, matching their map colors.
+    /// red dots for shooters, orange for hunters, purple for runners,
+    /// matching their map colors.
     private func updateEnemyDots() {
         guard let world, let enemyDotsNode else { return }
         var shooters = 0
+        var hunters = 0
         var runners = 0
         for body in world.bodies {
             if body.kind == .shooter { shooters += 1 }
+            if body.kind == .hunter { hunters += 1 }
             if body.kind == .runner { runners += 1 }
         }
-        guard (shooters, runners) != lastEnemyDotCounts else { return }
-        lastEnemyDotCounts = (shooters, runners)
+        guard (shooters, hunters, runners) != lastEnemyDotCounts else { return }
+        lastEnemyDotCounts = (shooters, hunters, runners)
 
         enemyDotsNode.removeAllChildren()
-        let total = shooters + runners
+        let total = shooters + hunters + runners
         guard total > 0 else { return }
         let spacing: CGFloat = 12
         var x = -CGFloat(total - 1) * spacing / 2
@@ -509,7 +567,9 @@ final class GameScene: SKScene {
             let dot = SKShapeNode(circleOfRadius: 3.5)
             dot.fillColor = index < shooters
                 ? SKColor(red: 1, green: 0.45, blue: 0.35, alpha: 1)   // shooter red
-                : SKColor(red: 0.75, green: 0.42, blue: 1, alpha: 1)   // runner purple
+                : index < shooters + hunters
+                    ? SKColor(red: 1, green: 0.62, blue: 0.15, alpha: 1) // hunter orange
+                    : SKColor(red: 0.75, green: 0.42, blue: 1, alpha: 1) // runner purple
             dot.strokeColor = .clear
             dot.position = CGPoint(x: x, y: 0)
             enemyDotsNode.addChild(dot)
@@ -610,7 +670,7 @@ final class GameScene: SKScene {
                 }
                 lastPlayerPosition = position
                 playerNode?.position = position
-            case .npc, .shooter, .runner:
+            case .npc, .shooter, .runner, .hunter:
                 guard let node = npcNodes[body.id] else { break }
                 node.position = CGPoint(x: body.position.x, y: body.position.y)
                 // Shooters track the player; runners face their movement.
@@ -620,7 +680,8 @@ final class GameScene: SKScene {
                     if toPlayer.length > 1 {
                         node.zRotation = CGFloat(atan2(toPlayer.y, toPlayer.x))
                     }
-                } else if body.kind == .runner, body.velocity.length > 1 {
+                } else if body.kind == .runner || body.kind == .hunter,
+                          body.velocity.length > 1 {
                     node.zRotation = CGFloat(atan2(body.velocity.y, body.velocity.x))
                 }
             case .rock:
@@ -847,8 +908,21 @@ final class GameScene: SKScene {
             if victimID == world.playerID {
                 // A reflected beam looped back into the player: self-hit.
                 killPlayer()
-            } else if world.body(withID: victimID)?.kind.isHostile == true {
-                kill(npcID: victimID, at: endPoint)
+            } else if let victim = world.body(withID: victimID), victim.kind.isHostile {
+                if victim.kind == .hunter {
+                    // Armor: needs cumulative beam contact; heats up visibly.
+                    let damage = (hunterDamage[victimID] ?? 0) + frameDt
+                    hunterDamage[victimID] = damage
+                    if damage >= hunterArmorSeconds {
+                        kill(npcID: victimID, at: endPoint)
+                    } else if let node = npcNodes[victimID] {
+                        let f = CGFloat(damage / hunterArmorSeconds)
+                        node.fillColor = SKColor(red: 1, green: 0.62 + 0.33 * f,
+                                                 blue: 0.15 + 0.7 * f, alpha: 1)
+                    }
+                } else {
+                    kill(npcID: victimID, at: endPoint)
+                }
             }
             // Rocks just absorb the beam.
         }
@@ -951,6 +1025,97 @@ final class GameScene: SKScene {
         SoundManager.shared.playShooterFire()
     }
 
+    /// Hunter state machine: amble around the map; on noticing the player
+    /// (on screen + line of sight) loop run-closer → aim 500ms at a locked
+    /// point → shoot. The lock makes the shot dodgeable; a miss restarts the
+    /// loop, losing sight returns the hunter to patrol.
+    private func processHunters(_ currentTime: TimeInterval) {
+        guard let world else { return }
+        guard gameStarted, let pid = world.playerID,
+              let player = world.body(withID: pid) else {
+            for body in world.bodies where body.kind == .hunter {
+                world.setVelocity(.zero, forBodyID: body.id)
+            }
+            for node in hunterAimNodes.values { node.isHidden = true }
+            return
+        }
+        for body in world.bodies where body.kind == .hunter {
+            let id = body.id
+            let noticed = isOnScreen(position: body.position, radius: body.radius)
+                && world.hasLineOfSight(from: id, to: pid)
+            var mode = hunterModes[id] ?? .patrol(direction: .zero, until: 0)
+
+            if case .patrol = mode, noticed {
+                mode = .approach(until: currentTime + hunterApproachDuration)
+            }
+
+            switch mode {
+            case .patrol(var direction, var until):
+                if currentTime >= until || direction == .zero {
+                    let angle = Double.random(in: 0..<(2 * .pi))
+                    direction = Vector2(cos(angle), sin(angle))
+                    until = currentTime + Double.random(in: 1.5...3.5)
+                }
+                world.setVelocity(direction * hunterPatrolSpeed, forBodyID: id)
+                mode = .patrol(direction: direction, until: until)
+                hunterAimNodes[id]?.isHidden = true
+
+            case .approach(let until):
+                if !noticed {
+                    mode = .patrol(direction: .zero, until: 0)
+                    world.setVelocity(.zero, forBodyID: id)
+                } else if currentTime >= until {
+                    mode = .aim(target: player.position, start: currentTime)
+                    world.setVelocity(.zero, forBodyID: id)
+                } else {
+                    let toPlayer = player.position - body.position
+                    world.setVelocity(toPlayer.length > 1
+                                      ? toPlayer.normalized * hunterApproachSpeed
+                                      : .zero, forBodyID: id)
+                }
+                hunterAimNodes[id]?.isHidden = true
+
+            case .aim(let target, let start):
+                world.setVelocity(.zero, forBodyID: id)
+                if let aim = hunterAimNodes[id] {
+                    let path = CGMutablePath()
+                    path.move(to: CGPoint(x: body.position.x, y: body.position.y))
+                    path.addLine(to: CGPoint(x: target.x, y: target.y))
+                    aim.path = path
+                    aim.isHidden = false
+                }
+                if currentTime - start >= hunterAimDuration {
+                    hunterAimNodes[id]?.isHidden = true
+                    fireHunterShot(from: body, lockedTarget: target,
+                                   player: player, world: world)
+                    guard gameStarted else { return } // the shot connected
+                    mode = noticed ? .approach(until: currentTime + hunterApproachDuration)
+                                   : .patrol(direction: .zero, until: 0)
+                }
+            }
+            hunterModes[id] = mode
+        }
+    }
+
+    /// The hunter's shot: a straight ray through the locked aim point. Hits
+    /// only if the player's circle sits on that ray with clear line of sight
+    /// — dodging sideways during the 500ms aim makes it miss.
+    private func fireHunterShot(from hunter: CircleBody, lockedTarget: Vector2,
+                                player: CircleBody, world: World) {
+        let direction = lockedTarget - hunter.position
+        guard direction.length > 1 else { return }
+        let dir = direction.normalized
+        let toPlayer = player.position - hunter.position
+        let along = toPlayer.dot(dir)
+        let perpendicular = (toPlayer - dir * along).length
+        let beamLength = max(along + 300, 500)
+        fireShooterBeam(from: hunter.position, to: hunter.position + dir * beamLength)
+        if along > 0, perpendicular <= player.radius + 2,
+           world.hasLineOfSight(from: hunter.id, to: player.id) {
+            killPlayer()
+        }
+    }
+
     private func checkRunnerTouches() {
         guard gameStarted, let world, let pid = world.playerID,
               let player = world.body(withID: pid) else { return }
@@ -973,6 +1138,7 @@ final class GameScene: SKScene {
         burstEndTime = 0
         fadeOutBeamIfNeeded()
         for node in shooterAimNodes.values { node.isHidden = true }
+        for node in hunterAimNodes.values { node.isHidden = true }
         if let node = playerNode {
             node.run(.sequence([
                 .group([
@@ -1090,6 +1256,9 @@ final class GameScene: SKScene {
         }
         shooterAimStart[npcID] = nil
         shooterAimNodes.removeValue(forKey: npcID)?.removeFromParent()
+        hunterModes[npcID] = nil
+        hunterDamage[npcID] = nil
+        hunterAimNodes.removeValue(forKey: npcID)?.removeFromParent()
 
         if let node = npcNodes.removeValue(forKey: npcID) {
             node.run(.sequence([

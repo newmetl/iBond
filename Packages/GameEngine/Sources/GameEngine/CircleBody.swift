@@ -11,11 +11,15 @@ public struct CircleBody: Identifiable, Equatable {
         case shooter
         /// Hostile that steers toward the player; kills on touch (app layer).
         case runner
+        /// Patrolling hostile steered by the app via `setVelocity` (patrol /
+        /// approach / aim / shoot state machine lives in the app layer). The
+        /// engine integrates, damps, and collides it like any hostile.
+        case hunter
 
         /// Hostile kinds are laser-killable and count toward the win condition.
         public var isHostile: Bool {
             switch self {
-            case .npc, .shooter, .runner: return true
+            case .npc, .shooter, .runner, .hunter: return true
             case .player, .rock: return false
             }
         }
