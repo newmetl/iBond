@@ -55,17 +55,25 @@ final class GameScene: SKScene {
     /// (about 200 pieces on the original 3×3 map).
     private let litterPerScreen = 22
 
-    /// Virtual joystick (lower-left): knob travel radius, touch-capture zone,
-    /// and the base's offset from the screen corner.
+    /// Virtual joystick (in the control strip, left): knob travel radius and
+    /// touch-capture zone.
     private let joystickRadius: CGFloat = 70
     private let steeringZoneRadius: CGFloat = 120
-    private let joystickCornerOffset = CGPoint(x: 80, y: 92)
 
-    /// Fire button (lower-right): tap = burst, hold = continuous. The beam
-    /// fires along the player's current facing.
+    /// Fire button (control strip, right; classic joystick scheme only):
+    /// tap = burst, hold = continuous. The beam fires along the player's
+    /// current facing.
     private let fireButtonRadius: CGFloat = 44
     private let fireZoneRadius: CGFloat = 100
-    private let fireButtonCornerOffset = CGPoint(x: 65, y: 88)
+
+    /// Both stick schemes reserve an opaque strip at the bottom of the screen
+    /// for the controls; the visible play area is everything above it. The
+    /// pure tap scheme has no on-screen controls and keeps the full screen.
+    private var controlStripHeight: CGFloat {
+        controlScheme == .tap ? 0 : min(190, size.height * 0.24)
+    }
+    private var controlPanel: SKSpriteNode?
+    private var controlPanelSeparator: SKSpriteNode?
 
     private let mirrorHalfLength: Double = 70
 
@@ -140,18 +148,29 @@ final class GameScene: SKScene {
         batteryHUDNode?.position = CGPoint(x: 0, y: size.height / 2 - 80)
         joystickBase?.position = joystickCenter
         fireButton?.position = fireButtonCenter
+        layoutControlPanel()
     }
 
-    /// Joystick base center in camera coordinates (lower-left corner).
+    /// Sizes and positions the control strip's backdrop + separator line.
+    private func layoutControlPanel() {
+        controlPanel?.size = CGSize(width: size.width, height: controlStripHeight)
+        controlPanel?.position = CGPoint(x: 0, y: -size.height / 2 + controlStripHeight / 2)
+        controlPanelSeparator?.size = CGSize(width: size.width, height: 1.5)
+        controlPanelSeparator?.position = CGPoint(x: 0, y: -size.height / 2 + controlStripHeight)
+    }
+
+    /// Joystick base center in camera coordinates: left half of the control
+    /// strip, pulled in from the screen edge (80pt from the corner felt too
+    /// close) and vertically centered in the strip.
     private var joystickCenter: CGPoint {
-        CGPoint(x: -size.width / 2 + joystickCornerOffset.x,
-                y: -size.height / 2 + joystickCornerOffset.y)
+        CGPoint(x: -size.width / 2 + 130,
+                y: -size.height / 2 + controlStripHeight * 0.5)
     }
 
-    /// Fire button center in camera coordinates (lower-right corner).
+    /// Fire button center in camera coordinates: right side of the strip.
     private var fireButtonCenter: CGPoint {
-        CGPoint(x: size.width / 2 - fireButtonCornerOffset.x,
-                y: -size.height / 2 + fireButtonCornerOffset.y)
+        CGPoint(x: size.width / 2 - 70,
+                y: -size.height / 2 + controlStripHeight * 0.5)
     }
 
     override func update(_ currentTime: TimeInterval) {
@@ -233,6 +252,8 @@ final class GameScene: SKScene {
         joystickBase = nil
         joystickKnob = nil
         fireButton = nil
+        controlPanel = nil
+        controlPanelSeparator = nil
         lastPlayerPosition = nil
         laserNode = nil
         sparkNode = nil
@@ -550,7 +571,21 @@ final class GameScene: SKScene {
         // The joystick exists in every scheme except pure tap; the fire
         // button only in the classic joystick scheme.
         if controlScheme != .tap {
-            // Virtual joystick, pinned to the camera's lower-left corner.
+            // Opaque strip along the bottom: the controls' home, visually
+            // separated from the (reduced) play area above it.
+            let panel = SKSpriteNode(color: SKColor(red: 0.07, green: 0.07, blue: 0.12, alpha: 1),
+                                     size: .zero)
+            panel.zPosition = 2.9 // over every world node, under the HUD tier
+            camera.addChild(panel)
+            controlPanel = panel
+
+            let separator = SKSpriteNode(color: SKColor(white: 1, alpha: 0.22), size: .zero)
+            separator.zPosition = 2.9
+            camera.addChild(separator)
+            controlPanelSeparator = separator
+            layoutControlPanel()
+
+            // Virtual joystick, on the strip's left half.
             let base = SKShapeNode(circleOfRadius: joystickRadius)
             base.fillColor = SKColor(white: 1, alpha: 0.05)
             base.strokeColor = SKColor(white: 1, alpha: 0.25)
@@ -821,13 +856,14 @@ final class GameScene: SKScene {
         case .tap:
             tapSchemeTouchesBegan(touches)
         case .stickAndTap:
-            // Joystick steers; any touch outside its zone fires.
+            // Joystick steers; a touch on the play area (above the control
+            // strip) fires. Stray touches on the strip do nothing.
             for touch in touches {
                 if isInSteeringZone(touch) {
                     if touchController.began(touch, as: .joystick) {
                         updateJoystick(with: touch)
                     }
-                } else {
+                } else if !isInControlStrip(touch) {
                     beginFireTouch(touch)
                 }
             }
@@ -908,6 +944,11 @@ final class GameScene: SKScene {
         let dx = location.x - joystickCenter.x
         let dy = location.y - joystickCenter.y
         return dx * dx + dy * dy <= steeringZoneRadius * steeringZoneRadius
+    }
+
+    private func isInControlStrip(_ touch: UITouch) -> Bool {
+        guard let cameraNode else { return false }
+        return touch.location(in: cameraNode).y < -size.height / 2 + controlStripHeight
     }
 
     private func isInFireZone(_ touch: UITouch) -> Bool {
@@ -1098,17 +1139,26 @@ final class GameScene: SKScene {
               let player = world.playerID.flatMap({ world.body(withID: $0) }) else { return }
         let halfW = size.width / 2
         let halfH = size.height / 2
-        var cam = CGPoint(x: CGFloat(player.position.x), y: CGFloat(player.position.y))
+        // Center the player in the VISIBLE play area — the part of the screen
+        // above the control strip — and let the bottom clamp stop at the strip's
+        // top edge so no map hides behind the panel.
+        let strip = controlStripHeight
+        var cam = CGPoint(x: CGFloat(player.position.x),
+                          y: CGFloat(player.position.y) - strip / 2)
         cam.x = min(max(cam.x, halfW), CGFloat(world.size.x) - halfW)
-        cam.y = min(max(cam.y, halfH), CGFloat(world.size.y) - halfH)
+        cam.y = min(max(cam.y, halfH - strip), CGFloat(world.size.y) - halfH)
         cameraNode.position = cam
     }
 
 
+    /// "On screen" means inside the VISIBLE play area: the control strip
+    /// covers the bottom of the screen, so bodies behind the panel don't
+    /// count (they can't be seen, must not activate or aim).
     private func isOnScreen(position: Vector2, radius: Double) -> Bool {
         guard let cameraNode else { return false }
         return abs(position.x - cameraNode.position.x) <= size.width / 2 + radius
-            && abs(position.y - cameraNode.position.y) <= size.height / 2 + radius
+            && position.y - cameraNode.position.y <= size.height / 2 + radius
+            && position.y - cameraNode.position.y >= -size.height / 2 + controlStripHeight - radius
     }
 
     // MARK: - Enemies
