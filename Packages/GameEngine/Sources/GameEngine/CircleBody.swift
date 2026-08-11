@@ -15,11 +15,15 @@ public struct CircleBody: Identifiable, Equatable {
         /// approach / aim / shoot state machine lives in the app layer). The
         /// engine integrates, damps, and collides it like any hostile.
         case hunter
+        /// A small proximity mine: dormant until the player comes close, then
+        /// magnetically drawn to them (dormancy check and homing are app
+        /// logic via `setVelocity`, like the hunter). Kills on touch.
+        case mine
 
         /// Hostile kinds are laser-killable and count toward the win condition.
         public var isHostile: Bool {
             switch self {
-            case .npc, .shooter, .runner, .hunter: return true
+            case .npc, .shooter, .runner, .hunter, .mine: return true
             case .player, .rock: return false
             }
         }

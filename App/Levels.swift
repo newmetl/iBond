@@ -89,6 +89,10 @@ struct LevelConfig {
     /// entrance; stepping through it springs the trap (all enemies notice
     /// the player at once). Every level ending in 5.
     let fortress: Bool
+    /// Proximity mines: tiny dormant hostiles that magnetically home in on
+    /// the player once approached. Introduced at level 51, rare at first,
+    /// then steadily more common.
+    let mines: Int
 
     /// Spawn distances derive from the map size (small maps can't honor the
     /// big-map minimums).
@@ -103,14 +107,15 @@ struct LevelConfig {
                             rocks: Int, mirrors: Int,
                             spares: [Int], carriers: [Int],
                             bosses: [BossSpec] = [],
-                            fortress: Bool = false) -> LevelConfig {
+                            fortress: Bool = false,
+                            mines: Int = 0) -> LevelConfig {
         LevelConfig(mapScale: CGFloat(map), runners: r, shooters: s, hunters: h,
                     bosses: bosses, rockCount: rocks, mirrorCount: mirrors,
                     redSpares: spares[0], orangeSpares: spares[1],
                     whiteSpares: spares[2],
                     shooterRedCarriers: carriers[0],
                     hunterOrangeCarriers: carriers[1],
-                    fortress: fortress)
+                    fortress: fortress, mines: mines)
     }
 
     /// Dev-only hunter proving ground ("level 0" in the dev grid).
@@ -181,64 +186,64 @@ struct LevelConfig {
         row(3.0, r: [4, 4, 0], s: [2, 5, 0], h: [2, 0, 0], rocks: 0, mirrors: 18, spares: [0, 1, 0], carriers: [2, 1]), // 49 · mirrors
 
         row(2.5, r: [2, 3, 0], s: [0, 2, 0], h: [1, 0, 0], rocks: 8, mirrors: 6, spares: [0, 2, 1], carriers: [0, 1], bosses: [BossSpec(kind: .shooter, tier: 1, shield: 22)]), // 50
-        row(3.0, r: [3, 4, 0], s: [2, 3, 0], h: [2, 1, 0], rocks: 15, mirrors: 10, spares: [0, 1, 0], carriers: [2, 1]), // 51
+        row(3.0, r: [3, 4, 0], s: [2, 3, 0], h: [2, 1, 0], rocks: 15, mirrors: 10, spares: [0, 1, 0], carriers: [2, 1], mines: 1), // 51
         row(3.0, r: [3, 4, 0], s: [2, 3, 0], h: [2, 1, 0], rocks: 15, mirrors: 10, spares: [0, 1, 0], carriers: [2, 1]),
-        row(3.0, r: [3, 4, 0], s: [2, 3, 0], h: [2, 1, 0], rocks: 15, mirrors: 10, spares: [0, 1, 0], carriers: [2, 1]),
+        row(3.0, r: [3, 4, 0], s: [2, 3, 0], h: [2, 1, 0], rocks: 15, mirrors: 10, spares: [0, 1, 0], carriers: [2, 1], mines: 1),
         row(3.0, r: [3, 4, 0], s: [2, 3, 0], h: [2, 2, 0], rocks: 15, mirrors: 10, spares: [0, 1, 0], carriers: [2, 1]),
-        row(3.0, r: [3, 4, 0], s: [2, 3, 0], h: [2, 2, 0], rocks: 16, mirrors: 10, spares: [0, 1, 0], carriers: [2, 1], fortress: true), // 55 · fortress
+        row(3.0, r: [3, 4, 0], s: [2, 3, 0], h: [2, 2, 0], rocks: 16, mirrors: 10, spares: [0, 1, 0], carriers: [2, 1], fortress: true, mines: 1), // 55 · fortress
 
         row(3.5, r: [3, 4, 0], s: [2, 3, 0], h: [2, 2, 0], rocks: 16, mirrors: 11, spares: [0, 1, 0], carriers: [2, 1]),
-        row(3.5, r: [3, 4, 0], s: [2, 3, 0], h: [2, 3, 0], rocks: 16, mirrors: 11, spares: [0, 1, 0], carriers: [2, 1]),
-        row(3.5, r: [3, 4, 0], s: [2, 3, 0], h: [2, 3, 0], rocks: 16, mirrors: 11, spares: [0, 1, 0], carriers: [2, 1]),
-        row(3.5, r: [3, 4, 0], s: [2, 3, 0], h: [2, 3, 0], rocks: 0, mirrors: 20, spares: [0, 1, 0], carriers: [2, 1]), // 59 · mirrors
+        row(3.5, r: [3, 4, 0], s: [2, 3, 0], h: [2, 3, 0], rocks: 16, mirrors: 11, spares: [0, 1, 0], carriers: [2, 1], mines: 1),
+        row(3.5, r: [3, 4, 0], s: [2, 3, 0], h: [2, 3, 0], rocks: 16, mirrors: 11, spares: [0, 1, 0], carriers: [2, 1], mines: 1),
+        row(3.5, r: [3, 4, 0], s: [2, 3, 0], h: [2, 3, 0], rocks: 0, mirrors: 20, spares: [0, 1, 0], carriers: [2, 1], mines: 1), // 59 · mirrors
 
         row(3.0, r: [0, 4, 0], s: [0, 2, 0], h: [1, 1, 0], rocks: 8, mirrors: 6, spares: [0, 2, 2], carriers: [0, 2], bosses: [BossSpec(kind: .hunter, tier: 1, shield: 24)]), // 60
-        row(3.5, r: [3, 3, 1], s: [2, 3, 0], h: [1, 2, 0], rocks: 17, mirrors: 12, spares: [0, 1, 0], carriers: [2, 1]), // 61
-        row(3.5, r: [3, 3, 1], s: [2, 3, 0], h: [1, 2, 0], rocks: 17, mirrors: 12, spares: [0, 1, 0], carriers: [2, 1]),
-        row(3.5, r: [3, 3, 2], s: [2, 3, 0], h: [1, 2, 0], rocks: 18, mirrors: 12, spares: [0, 1, 0], carriers: [2, 1]),
-        row(3.5, r: [3, 3, 2], s: [2, 3, 0], h: [1, 2, 0], rocks: 18, mirrors: 12, spares: [0, 1, 0], carriers: [2, 1]),
-        row(3.5, r: [3, 3, 3], s: [2, 3, 0], h: [1, 2, 0], rocks: 18, mirrors: 12, spares: [0, 1, 0], carriers: [2, 1], fortress: true), // 65 · fortress
+        row(3.5, r: [3, 3, 1], s: [2, 3, 0], h: [1, 2, 0], rocks: 17, mirrors: 12, spares: [0, 1, 0], carriers: [2, 1], mines: 1), // 61
+        row(3.5, r: [3, 3, 1], s: [2, 3, 0], h: [1, 2, 0], rocks: 17, mirrors: 12, spares: [0, 1, 0], carriers: [2, 1], mines: 1),
+        row(3.5, r: [3, 3, 2], s: [2, 3, 0], h: [1, 2, 0], rocks: 18, mirrors: 12, spares: [0, 1, 0], carriers: [2, 1], mines: 1),
+        row(3.5, r: [3, 3, 2], s: [2, 3, 0], h: [1, 2, 0], rocks: 18, mirrors: 12, spares: [0, 1, 0], carriers: [2, 1], mines: 2),
+        row(3.5, r: [3, 3, 3], s: [2, 3, 0], h: [1, 2, 0], rocks: 18, mirrors: 12, spares: [0, 1, 0], carriers: [2, 1], fortress: true, mines: 2), // 65 · fortress
 
-        row(3.5, r: [3, 3, 3], s: [2, 3, 0], h: [1, 2, 0], rocks: 18, mirrors: 13, spares: [0, 1, 0], carriers: [2, 1]),
-        row(3.5, r: [3, 3, 4], s: [2, 3, 0], h: [1, 2, 0], rocks: 19, mirrors: 13, spares: [0, 1, 0], carriers: [2, 1]),
-        row(3.5, r: [3, 3, 4], s: [2, 3, 0], h: [1, 2, 0], rocks: 19, mirrors: 13, spares: [0, 1, 0], carriers: [2, 1]),
-        row(3.5, r: [3, 3, 5], s: [2, 3, 0], h: [1, 2, 0], rocks: 0, mirrors: 22, spares: [0, 1, 0], carriers: [2, 1]), // 69 · mirrors
+        row(3.5, r: [3, 3, 3], s: [2, 3, 0], h: [1, 2, 0], rocks: 18, mirrors: 13, spares: [0, 1, 0], carriers: [2, 1], mines: 2),
+        row(3.5, r: [3, 3, 4], s: [2, 3, 0], h: [1, 2, 0], rocks: 19, mirrors: 13, spares: [0, 1, 0], carriers: [2, 1], mines: 2),
+        row(3.5, r: [3, 3, 4], s: [2, 3, 0], h: [1, 2, 0], rocks: 19, mirrors: 13, spares: [0, 1, 0], carriers: [2, 1], mines: 2),
+        row(3.5, r: [3, 3, 5], s: [2, 3, 0], h: [1, 2, 0], rocks: 0, mirrors: 22, spares: [0, 1, 0], carriers: [2, 1], mines: 2), // 69 · mirrors
 
-        row(3.0, r: [0, 3, 2], s: [0, 2, 0], h: [0, 2, 0], rocks: 9, mirrors: 7, spares: [0, 2, 2], carriers: [0, 2], bosses: [BossSpec(kind: .runner, tier: 2, shield: 26)]), // 70
-        row(4.0, r: [2, 3, 4], s: [1, 2, 1], h: [1, 2, 0], rocks: 20, mirrors: 14, spares: [0, 2, 0], carriers: [2, 1]), // 71
-        row(4.0, r: [2, 3, 4], s: [1, 2, 1], h: [1, 2, 0], rocks: 20, mirrors: 14, spares: [0, 2, 0], carriers: [2, 1]),
-        row(4.0, r: [2, 3, 4], s: [1, 2, 2], h: [1, 2, 0], rocks: 20, mirrors: 14, spares: [0, 2, 0], carriers: [2, 1]),
-        row(4.0, r: [2, 3, 4], s: [1, 2, 2], h: [1, 2, 0], rocks: 20, mirrors: 14, spares: [0, 2, 0], carriers: [2, 1]),
-        row(4.0, r: [2, 3, 4], s: [1, 2, 3], h: [1, 2, 0], rocks: 21, mirrors: 14, spares: [0, 2, 0], carriers: [2, 1], fortress: true), // 75 · fortress
+        row(3.0, r: [0, 3, 2], s: [0, 2, 0], h: [0, 2, 0], rocks: 9, mirrors: 7, spares: [0, 2, 2], carriers: [0, 2], bosses: [BossSpec(kind: .runner, tier: 2, shield: 26)], mines: 1), // 70
+        row(4.0, r: [2, 3, 4], s: [1, 2, 1], h: [1, 2, 0], rocks: 20, mirrors: 14, spares: [0, 2, 0], carriers: [2, 1], mines: 2), // 71
+        row(4.0, r: [2, 3, 4], s: [1, 2, 1], h: [1, 2, 0], rocks: 20, mirrors: 14, spares: [0, 2, 0], carriers: [2, 1], mines: 2),
+        row(4.0, r: [2, 3, 4], s: [1, 2, 2], h: [1, 2, 0], rocks: 20, mirrors: 14, spares: [0, 2, 0], carriers: [2, 1], mines: 3),
+        row(4.0, r: [2, 3, 4], s: [1, 2, 2], h: [1, 2, 0], rocks: 20, mirrors: 14, spares: [0, 2, 0], carriers: [2, 1], mines: 3),
+        row(4.0, r: [2, 3, 4], s: [1, 2, 3], h: [1, 2, 0], rocks: 21, mirrors: 14, spares: [0, 2, 0], carriers: [2, 1], fortress: true, mines: 3), // 75 · fortress
 
-        row(4.0, r: [2, 3, 4], s: [1, 2, 3], h: [1, 2, 0], rocks: 21, mirrors: 15, spares: [0, 2, 0], carriers: [2, 1]),
-        row(4.0, r: [2, 3, 4], s: [1, 2, 4], h: [1, 2, 0], rocks: 21, mirrors: 15, spares: [0, 2, 0], carriers: [2, 1]),
-        row(4.0, r: [2, 3, 4], s: [1, 2, 4], h: [1, 2, 0], rocks: 21, mirrors: 15, spares: [0, 2, 0], carriers: [2, 1]),
-        row(4.0, r: [2, 3, 4], s: [1, 2, 5], h: [1, 2, 0], rocks: 0, mirrors: 24, spares: [0, 2, 0], carriers: [2, 1]), // 79 · mirrors
+        row(4.0, r: [2, 3, 4], s: [1, 2, 3], h: [1, 2, 0], rocks: 21, mirrors: 15, spares: [0, 2, 0], carriers: [2, 1], mines: 3),
+        row(4.0, r: [2, 3, 4], s: [1, 2, 4], h: [1, 2, 0], rocks: 21, mirrors: 15, spares: [0, 2, 0], carriers: [2, 1], mines: 3),
+        row(4.0, r: [2, 3, 4], s: [1, 2, 4], h: [1, 2, 0], rocks: 21, mirrors: 15, spares: [0, 2, 0], carriers: [2, 1], mines: 4),
+        row(4.0, r: [2, 3, 4], s: [1, 2, 5], h: [1, 2, 0], rocks: 0, mirrors: 24, spares: [0, 2, 0], carriers: [2, 1], mines: 3), // 79 · mirrors
 
-        row(3.0, r: [0, 2, 3], s: [0, 0, 2], h: [0, 2, 0], rocks: 9, mirrors: 7, spares: [0, 3, 2], carriers: [0, 2], bosses: [BossSpec(kind: .shooter, tier: 2, shield: 28)]), // 80
-        row(4.5, r: [2, 2, 4], s: [1, 2, 3], h: [1, 1, 1], rocks: 22, mirrors: 16, spares: [0, 2, 0], carriers: [2, 1]), // 81
-        row(4.5, r: [2, 2, 4], s: [1, 2, 3], h: [1, 1, 1], rocks: 22, mirrors: 16, spares: [0, 2, 0], carriers: [2, 1]),
-        row(4.5, r: [2, 2, 4], s: [1, 2, 3], h: [1, 1, 1], rocks: 23, mirrors: 16, spares: [0, 2, 0], carriers: [2, 1]),
-        row(4.5, r: [2, 2, 4], s: [1, 2, 3], h: [1, 1, 2], rocks: 23, mirrors: 16, spares: [0, 2, 0], carriers: [2, 1]),
-        row(4.5, r: [2, 2, 4], s: [1, 2, 3], h: [1, 1, 2], rocks: 23, mirrors: 16, spares: [0, 2, 0], carriers: [2, 1], fortress: true), // 85 · fortress
-        row(4.5, r: [2, 2, 4], s: [1, 2, 3], h: [1, 1, 2], rocks: 23, mirrors: 17, spares: [0, 2, 0], carriers: [2, 1]),
-        row(4.5, r: [2, 2, 4], s: [1, 2, 3], h: [1, 1, 3], rocks: 24, mirrors: 17, spares: [0, 2, 0], carriers: [2, 1]),
-        row(4.5, r: [2, 2, 4], s: [1, 2, 3], h: [1, 1, 3], rocks: 24, mirrors: 17, spares: [0, 2, 0], carriers: [2, 1]),
-        row(4.5, r: [2, 2, 4], s: [1, 2, 3], h: [1, 1, 3], rocks: 0, mirrors: 26, spares: [0, 2, 0], carriers: [2, 1]), // 89 · mirrors
-        row(3.0, r: [0, 0, 4], s: [0, 0, 2], h: [0, 1, 1], rocks: 10, mirrors: 8, spares: [0, 3, 3], carriers: [0, 2], bosses: [BossSpec(kind: .hunter, tier: 2, shield: 30)]), // 90
-        row(5.0, r: [2, 2, 4], s: [1, 2, 3], h: [1, 1, 2], rocks: 25, mirrors: 18, spares: [0, 3, 0], carriers: [2, 2]), // 91
-        row(5.0, r: [2, 2, 4], s: [1, 2, 3], h: [1, 1, 2], rocks: 25, mirrors: 18, spares: [0, 3, 0], carriers: [2, 2]),
-        row(5.0, r: [2, 2, 5], s: [1, 2, 3], h: [1, 1, 2], rocks: 25, mirrors: 18, spares: [0, 3, 0], carriers: [2, 2]),
-        row(5.0, r: [2, 2, 5], s: [1, 2, 4], h: [1, 1, 3], rocks: 25, mirrors: 18, spares: [0, 3, 0], carriers: [2, 2]),
-        row(5.0, r: [2, 2, 5], s: [1, 2, 4], h: [1, 1, 3], rocks: 26, mirrors: 18, spares: [0, 3, 0], carriers: [2, 2], fortress: true), // 95 · fortress
+        row(3.0, r: [0, 2, 3], s: [0, 0, 2], h: [0, 2, 0], rocks: 9, mirrors: 7, spares: [0, 3, 2], carriers: [0, 2], bosses: [BossSpec(kind: .shooter, tier: 2, shield: 28)], mines: 2), // 80
+        row(4.5, r: [2, 2, 4], s: [1, 2, 3], h: [1, 1, 1], rocks: 22, mirrors: 16, spares: [0, 2, 0], carriers: [2, 1], mines: 4), // 81
+        row(4.5, r: [2, 2, 4], s: [1, 2, 3], h: [1, 1, 1], rocks: 22, mirrors: 16, spares: [0, 2, 0], carriers: [2, 1], mines: 4),
+        row(4.5, r: [2, 2, 4], s: [1, 2, 3], h: [1, 1, 1], rocks: 23, mirrors: 16, spares: [0, 2, 0], carriers: [2, 1], mines: 4),
+        row(4.5, r: [2, 2, 4], s: [1, 2, 3], h: [1, 1, 2], rocks: 23, mirrors: 16, spares: [0, 2, 0], carriers: [2, 1], mines: 5),
+        row(4.5, r: [2, 2, 4], s: [1, 2, 3], h: [1, 1, 2], rocks: 23, mirrors: 16, spares: [0, 2, 0], carriers: [2, 1], fortress: true, mines: 5), // 85 · fortress
+        row(4.5, r: [2, 2, 4], s: [1, 2, 3], h: [1, 1, 2], rocks: 23, mirrors: 17, spares: [0, 2, 0], carriers: [2, 1], mines: 5),
+        row(4.5, r: [2, 2, 4], s: [1, 2, 3], h: [1, 1, 3], rocks: 24, mirrors: 17, spares: [0, 2, 0], carriers: [2, 1], mines: 5),
+        row(4.5, r: [2, 2, 4], s: [1, 2, 3], h: [1, 1, 3], rocks: 24, mirrors: 17, spares: [0, 2, 0], carriers: [2, 1], mines: 6),
+        row(4.5, r: [2, 2, 4], s: [1, 2, 3], h: [1, 1, 3], rocks: 0, mirrors: 26, spares: [0, 2, 0], carriers: [2, 1], mines: 5), // 89 · mirrors
+        row(3.0, r: [0, 0, 4], s: [0, 0, 2], h: [0, 1, 1], rocks: 10, mirrors: 8, spares: [0, 3, 3], carriers: [0, 2], bosses: [BossSpec(kind: .hunter, tier: 2, shield: 30)], mines: 3), // 90
+        row(5.0, r: [2, 2, 4], s: [1, 2, 3], h: [1, 1, 2], rocks: 25, mirrors: 18, spares: [0, 3, 0], carriers: [2, 2], mines: 6), // 91
+        row(5.0, r: [2, 2, 4], s: [1, 2, 3], h: [1, 1, 2], rocks: 25, mirrors: 18, spares: [0, 3, 0], carriers: [2, 2], mines: 6),
+        row(5.0, r: [2, 2, 5], s: [1, 2, 3], h: [1, 1, 2], rocks: 25, mirrors: 18, spares: [0, 3, 0], carriers: [2, 2], mines: 6),
+        row(5.0, r: [2, 2, 5], s: [1, 2, 4], h: [1, 1, 3], rocks: 25, mirrors: 18, spares: [0, 3, 0], carriers: [2, 2], mines: 7),
+        row(5.0, r: [2, 2, 5], s: [1, 2, 4], h: [1, 1, 3], rocks: 26, mirrors: 18, spares: [0, 3, 0], carriers: [2, 2], fortress: true, mines: 7), // 95 · fortress
 
-        row(5.0, r: [2, 2, 6], s: [1, 2, 4], h: [1, 1, 3], rocks: 26, mirrors: 19, spares: [0, 3, 0], carriers: [2, 2]),
-        row(5.0, r: [2, 2, 6], s: [1, 2, 4], h: [1, 1, 3], rocks: 26, mirrors: 19, spares: [0, 3, 0], carriers: [2, 2]),
-        row(5.0, r: [2, 2, 6], s: [1, 2, 5], h: [1, 1, 4], rocks: 26, mirrors: 19, spares: [0, 3, 0], carriers: [2, 2]),
-        row(5.0, r: [2, 2, 7], s: [1, 2, 5], h: [1, 1, 4], rocks: 0, mirrors: 28, spares: [0, 3, 0], carriers: [2, 2]), // 99 · mirrors
+        row(5.0, r: [2, 2, 6], s: [1, 2, 4], h: [1, 1, 3], rocks: 26, mirrors: 19, spares: [0, 3, 0], carriers: [2, 2], mines: 7),
+        row(5.0, r: [2, 2, 6], s: [1, 2, 4], h: [1, 1, 3], rocks: 26, mirrors: 19, spares: [0, 3, 0], carriers: [2, 2], mines: 8),
+        row(5.0, r: [2, 2, 6], s: [1, 2, 5], h: [1, 1, 4], rocks: 26, mirrors: 19, spares: [0, 3, 0], carriers: [2, 2], mines: 8),
+        row(5.0, r: [2, 2, 7], s: [1, 2, 5], h: [1, 1, 4], rocks: 0, mirrors: 28, spares: [0, 3, 0], carriers: [2, 2], mines: 8), // 99 · mirrors
 
-        row(3.5, r: [0, 0, 4], s: [0, 0, 2], h: [0, 0, 2], rocks: 10, mirrors: 8, spares: [0, 4, 4], carriers: [0, 3], bosses: [BossSpec(kind: .runner, tier: 2, shield: 18), BossSpec(kind: .shooter, tier: 2, shield: 18), BossSpec(kind: .hunter, tier: 2, shield: 18)]), // 100
+        row(3.5, r: [0, 0, 4], s: [0, 0, 2], h: [0, 0, 2], rocks: 10, mirrors: 8, spares: [0, 4, 4], carriers: [0, 3], bosses: [BossSpec(kind: .runner, tier: 2, shield: 18), BossSpec(kind: .shooter, tier: 2, shield: 18), BossSpec(kind: .hunter, tier: 2, shield: 18)], mines: 8), // 100
     ]
 
     /// Levels are 1-based; 0 is the hunter test; out-of-range clamps.
