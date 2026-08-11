@@ -251,6 +251,8 @@ public final class World {
             for j in (i + 1)..<bodies.count {
                 var a = bodies[i]
                 var b = bodies[j]
+                // Phantoms (mines) ghost through every body.
+                guard !a.isPhantom, !b.isPhantom else { continue }
                 let delta = b.position - a.position
                 let dist = delta.length
                 let minDist = a.radius + b.radius
@@ -286,7 +288,7 @@ public final class World {
     /// out along the shortest exit, and its approach velocity is cancelled.
     private func resolveMirrorCollisions() {
         guard !mirrors.isEmpty else { return }
-        for i in bodies.indices where !bodies[i].isStatic {
+        for i in bodies.indices where !bodies[i].isStatic && !bodies[i].isPhantom {
             for mirror in mirrors {
                 let closest = Self.closestPoint(onSegment: mirror.start, mirror.end,
                                                 to: bodies[i].position)

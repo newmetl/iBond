@@ -32,6 +32,11 @@ public struct CircleBody: Identifiable, Equatable {
     /// Static bodies take no integration, damping, or collision response.
     public var isStatic: Bool { kind == .rock }
 
+    /// Phantom bodies fly straight through everything — other bodies and
+    /// mirrors alike — and neither push nor get pushed. They stay clamped to
+    /// the world bounds and remain fully laser-hittable.
+    public var isPhantom: Bool { kind == .mine }
+
     public let id: BodyID
     public let kind: Kind
     public var position: Vector2
