@@ -185,10 +185,16 @@ final class GameScene: SKScene {
     override func didChangeSize(_ oldSize: CGSize) {
         // The map is larger than the screen and fixed at game start — resizes
         // only change the viewport. Keep the HUD pinned inside the camera frame.
-        batteryHUDNode?.position = CGPoint(x: 0, y: size.height / 2 - 80)
+        batteryHUDNode?.position = topHUDCenter
         joystickBase?.position = joystickCenter
         fireButton?.position = fireButtonCenter
         layoutControlPanel()
+    }
+
+    /// Top HUD anchor: horizontally centered over the visible PLAY AREA —
+    /// which is shifted right by the control column in landscape.
+    private var topHUDCenter: CGPoint {
+        CGPoint(x: controlColumnWidth / 2, y: size.height / 2 - 80)
     }
 
     /// Sizes and positions the control area's backdrop + separator line:
@@ -989,7 +995,7 @@ final class GameScene: SKScene {
         // Top HUD (rides the camera): just the current level and the enemy
         // dot row — the battery state lives on the strip buttons below.
         let hud = SKNode()
-        hud.position = CGPoint(x: 0, y: size.height / 2 - 80)
+        hud.position = topHUDCenter
         hud.zPosition = 3
         hud.alpha = 0.85
         camera.addChild(hud)
