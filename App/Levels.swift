@@ -76,6 +76,10 @@ struct LevelConfig {
     /// Designated carriers: shooters drop Red, hunters drop Orange.
     let shooterRedCarriers: Int
     let hunterOrangeCarriers: Int
+    /// Fortress level: every enemy sits inside a rock ring with a single
+    /// entrance; stepping through it springs the trap (all enemies notice
+    /// the player at once). Every level ending in 5.
+    let fortress: Bool
 
     /// Spawn distances derive from the map size (small maps can't honor the
     /// big-map minimums).
@@ -89,13 +93,15 @@ struct LevelConfig {
     private static func row(_ map: Double, r: [Int], s: [Int], h: [Int],
                             rocks: Int, mirrors: Int,
                             spares: [Int], carriers: [Int],
-                            bosses: [BossSpec] = []) -> LevelConfig {
+                            bosses: [BossSpec] = [],
+                            fortress: Bool = false) -> LevelConfig {
         LevelConfig(mapScale: CGFloat(map), runners: r, shooters: s, hunters: h,
                     bosses: bosses, rockCount: rocks, mirrorCount: mirrors,
                     redSpares: spares[0], orangeSpares: spares[1],
                     whiteSpares: spares[2],
                     shooterRedCarriers: carriers[0],
-                    hunterOrangeCarriers: carriers[1])
+                    hunterOrangeCarriers: carriers[1],
+                    fortress: fortress)
     }
 
     /// Dev-only hunter proving ground ("level 0" in the dev grid).
@@ -106,13 +112,15 @@ struct LevelConfig {
     // Decade 1 belongs to SHOOTERS (the gentler kind — ambush, dodgeable
     // telegraph); runners (relentless chase, touch = death) join at 11.
     // Special levels: every level ending in 9 is an ALL-MIRROR level (no
-    // rocks, escalating mirror count 10→28 — shooters hide behind mirrors).
+    // rocks, escalating mirror count 10→28 — shooters hide behind mirrors);
+    // every level ending in 5 is a FORTRESS level (see `fortress`).
     static let all: [LevelConfig] = [
         row(1.0, r: [0, 0, 0], s: [2, 0, 0], h: [0, 0, 0], rocks: 3, mirrors: 0, spares: [0, 0, 0], carriers: [0, 0]), // 1
         row(1.0, r: [0, 0, 0], s: [3, 0, 0], h: [0, 0, 0], rocks: 3, mirrors: 0, spares: [0, 0, 0], carriers: [0, 0]),
         row(1.0, r: [0, 0, 0], s: [4, 0, 0], h: [0, 0, 0], rocks: 3, mirrors: 0, spares: [0, 0, 0], carriers: [0, 0]),
         row(1.0, r: [0, 0, 0], s: [5, 0, 0], h: [0, 0, 0], rocks: 3, mirrors: 0, spares: [0, 0, 0], carriers: [0, 0]),
-        row(1.0, r: [0, 0, 0], s: [6, 0, 0], h: [0, 0, 0], rocks: 3, mirrors: 0, spares: [0, 0, 0], carriers: [0, 0]),
+        row(2.0, r: [0, 0, 0], s: [6, 0, 0], h: [0, 0, 0], rocks: 3, mirrors: 0, spares: [0, 0, 0], carriers: [0, 0], fortress: true), // 5 · fortress
+
         row(1.5, r: [0, 0, 0], s: [7, 0, 0], h: [0, 0, 0], rocks: 3, mirrors: 1, spares: [0, 0, 0], carriers: [0, 0]),
         row(1.5, r: [0, 0, 0], s: [8, 0, 0], h: [0, 0, 0], rocks: 4, mirrors: 1, spares: [0, 0, 0], carriers: [0, 0]),
         row(1.5, r: [0, 0, 0], s: [9, 0, 0], h: [0, 0, 0], rocks: 4, mirrors: 1, spares: [0, 0, 0], carriers: [0, 0]),
@@ -123,7 +131,8 @@ struct LevelConfig {
         row(1.5, r: [1, 0, 0], s: [5, 0, 0], h: [0, 0, 0], rocks: 5, mirrors: 2, spares: [0, 0, 0], carriers: [1, 0]),
         row(1.5, r: [2, 0, 0], s: [5, 0, 0], h: [0, 0, 0], rocks: 5, mirrors: 2, spares: [0, 0, 0], carriers: [1, 0]),
         row(1.5, r: [2, 0, 0], s: [6, 0, 0], h: [0, 0, 0], rocks: 5, mirrors: 2, spares: [0, 0, 0], carriers: [1, 0]),
-        row(1.5, r: [3, 0, 0], s: [6, 0, 0], h: [0, 0, 0], rocks: 6, mirrors: 2, spares: [1, 0, 0], carriers: [1, 0]),
+        row(2.0, r: [3, 0, 0], s: [6, 0, 0], h: [0, 0, 0], rocks: 6, mirrors: 2, spares: [1, 0, 0], carriers: [1, 0], fortress: true), // 15 · fortress
+
         row(2.0, r: [3, 0, 0], s: [6, 0, 0], h: [0, 0, 0], rocks: 6, mirrors: 3, spares: [1, 0, 0], carriers: [1, 0]),
         row(2.0, r: [4, 0, 0], s: [7, 0, 0], h: [0, 0, 0], rocks: 6, mirrors: 3, spares: [1, 0, 0], carriers: [1, 0]),
         row(2.0, r: [4, 0, 0], s: [7, 0, 0], h: [0, 0, 0], rocks: 6, mirrors: 3, spares: [1, 0, 0], carriers: [1, 0]),
@@ -134,7 +143,7 @@ struct LevelConfig {
         row(2.0, r: [5, 0, 0], s: [3, 0, 0], h: [1, 0, 0], rocks: 7, mirrors: 4, spares: [1, 0, 0], carriers: [1, 0]),
         row(2.0, r: [5, 0, 0], s: [3, 0, 0], h: [1, 0, 0], rocks: 8, mirrors: 4, spares: [1, 0, 0], carriers: [1, 0]),
         row(2.0, r: [5, 0, 0], s: [3, 0, 0], h: [2, 0, 0], rocks: 8, mirrors: 4, spares: [1, 0, 0], carriers: [1, 0]),
-        row(2.0, r: [5, 0, 0], s: [3, 0, 0], h: [2, 0, 0], rocks: 8, mirrors: 4, spares: [1, 0, 0], carriers: [1, 0]),
+        row(2.0, r: [5, 0, 0], s: [3, 0, 0], h: [2, 0, 0], rocks: 8, mirrors: 4, spares: [1, 0, 0], carriers: [1, 0], fortress: true), // 25 · fortress
         row(2.5, r: [5, 0, 0], s: [3, 0, 0], h: [2, 0, 0], rocks: 8, mirrors: 5, spares: [1, 0, 0], carriers: [1, 0]),
         row(2.5, r: [5, 0, 0], s: [3, 0, 0], h: [3, 0, 0], rocks: 9, mirrors: 5, spares: [1, 0, 0], carriers: [1, 0]),
         row(2.5, r: [5, 0, 0], s: [3, 0, 0], h: [3, 0, 0], rocks: 9, mirrors: 5, spares: [1, 0, 0], carriers: [1, 0]),
@@ -144,7 +153,8 @@ struct LevelConfig {
         row(2.5, r: [4, 1, 0], s: [3, 0, 0], h: [2, 0, 0], rocks: 10, mirrors: 6, spares: [0, 1, 0], carriers: [2, 1]),
         row(2.5, r: [4, 2, 0], s: [3, 0, 0], h: [2, 0, 0], rocks: 10, mirrors: 6, spares: [0, 1, 0], carriers: [2, 1]),
         row(2.5, r: [4, 2, 0], s: [3, 0, 0], h: [2, 0, 0], rocks: 10, mirrors: 6, spares: [0, 1, 0], carriers: [2, 1]),
-        row(2.5, r: [4, 3, 0], s: [3, 0, 0], h: [2, 0, 0], rocks: 11, mirrors: 6, spares: [0, 1, 0], carriers: [2, 1]),
+        row(2.5, r: [4, 3, 0], s: [3, 0, 0], h: [2, 0, 0], rocks: 11, mirrors: 6, spares: [0, 1, 0], carriers: [2, 1], fortress: true), // 35 · fortress
+
         row(2.5, r: [4, 3, 0], s: [3, 0, 0], h: [2, 0, 0], rocks: 11, mirrors: 7, spares: [0, 1, 0], carriers: [2, 1]),
         row(2.5, r: [4, 4, 0], s: [3, 0, 0], h: [2, 0, 0], rocks: 11, mirrors: 7, spares: [0, 1, 0], carriers: [2, 1]),
         row(2.5, r: [4, 4, 0], s: [3, 0, 0], h: [2, 0, 0], rocks: 11, mirrors: 7, spares: [0, 1, 0], carriers: [2, 1]),
@@ -155,7 +165,7 @@ struct LevelConfig {
         row(3.0, r: [4, 4, 0], s: [2, 1, 0], h: [2, 0, 0], rocks: 12, mirrors: 8, spares: [0, 1, 0], carriers: [2, 1]),
         row(3.0, r: [4, 4, 0], s: [2, 2, 0], h: [2, 0, 0], rocks: 13, mirrors: 8, spares: [0, 1, 0], carriers: [2, 1]),
         row(3.0, r: [4, 4, 0], s: [2, 2, 0], h: [2, 0, 0], rocks: 13, mirrors: 8, spares: [0, 1, 0], carriers: [2, 1]),
-        row(3.0, r: [4, 4, 0], s: [2, 3, 0], h: [2, 0, 0], rocks: 13, mirrors: 8, spares: [0, 1, 0], carriers: [2, 1]),
+        row(3.0, r: [4, 4, 0], s: [2, 3, 0], h: [2, 0, 0], rocks: 13, mirrors: 8, spares: [0, 1, 0], carriers: [2, 1], fortress: true), // 45 · fortress
         row(3.0, r: [4, 4, 0], s: [2, 3, 0], h: [2, 0, 0], rocks: 13, mirrors: 9, spares: [0, 1, 0], carriers: [2, 1]),
         row(3.0, r: [4, 4, 0], s: [2, 4, 0], h: [2, 0, 0], rocks: 14, mirrors: 9, spares: [0, 1, 0], carriers: [2, 1]),
         row(3.0, r: [4, 4, 0], s: [2, 4, 0], h: [2, 0, 0], rocks: 14, mirrors: 9, spares: [0, 1, 0], carriers: [2, 1]),
@@ -166,7 +176,8 @@ struct LevelConfig {
         row(3.0, r: [3, 4, 0], s: [2, 3, 0], h: [2, 1, 0], rocks: 15, mirrors: 10, spares: [0, 1, 0], carriers: [2, 1]),
         row(3.0, r: [3, 4, 0], s: [2, 3, 0], h: [2, 1, 0], rocks: 15, mirrors: 10, spares: [0, 1, 0], carriers: [2, 1]),
         row(3.0, r: [3, 4, 0], s: [2, 3, 0], h: [2, 2, 0], rocks: 15, mirrors: 10, spares: [0, 1, 0], carriers: [2, 1]),
-        row(3.0, r: [3, 4, 0], s: [2, 3, 0], h: [2, 2, 0], rocks: 16, mirrors: 10, spares: [0, 1, 0], carriers: [2, 1]),
+        row(3.0, r: [3, 4, 0], s: [2, 3, 0], h: [2, 2, 0], rocks: 16, mirrors: 10, spares: [0, 1, 0], carriers: [2, 1], fortress: true), // 55 · fortress
+
         row(3.5, r: [3, 4, 0], s: [2, 3, 0], h: [2, 2, 0], rocks: 16, mirrors: 11, spares: [0, 1, 0], carriers: [2, 1]),
         row(3.5, r: [3, 4, 0], s: [2, 3, 0], h: [2, 3, 0], rocks: 16, mirrors: 11, spares: [0, 1, 0], carriers: [2, 1]),
         row(3.5, r: [3, 4, 0], s: [2, 3, 0], h: [2, 3, 0], rocks: 16, mirrors: 11, spares: [0, 1, 0], carriers: [2, 1]),
@@ -177,7 +188,8 @@ struct LevelConfig {
         row(3.5, r: [3, 3, 1], s: [2, 3, 0], h: [1, 2, 0], rocks: 17, mirrors: 12, spares: [0, 1, 0], carriers: [2, 1]),
         row(3.5, r: [3, 3, 2], s: [2, 3, 0], h: [1, 2, 0], rocks: 18, mirrors: 12, spares: [0, 1, 0], carriers: [2, 1]),
         row(3.5, r: [3, 3, 2], s: [2, 3, 0], h: [1, 2, 0], rocks: 18, mirrors: 12, spares: [0, 1, 0], carriers: [2, 1]),
-        row(3.5, r: [3, 3, 3], s: [2, 3, 0], h: [1, 2, 0], rocks: 18, mirrors: 12, spares: [0, 1, 0], carriers: [2, 1]),
+        row(3.5, r: [3, 3, 3], s: [2, 3, 0], h: [1, 2, 0], rocks: 18, mirrors: 12, spares: [0, 1, 0], carriers: [2, 1], fortress: true), // 65 · fortress
+
         row(3.5, r: [3, 3, 3], s: [2, 3, 0], h: [1, 2, 0], rocks: 18, mirrors: 13, spares: [0, 1, 0], carriers: [2, 1]),
         row(3.5, r: [3, 3, 4], s: [2, 3, 0], h: [1, 2, 0], rocks: 19, mirrors: 13, spares: [0, 1, 0], carriers: [2, 1]),
         row(3.5, r: [3, 3, 4], s: [2, 3, 0], h: [1, 2, 0], rocks: 19, mirrors: 13, spares: [0, 1, 0], carriers: [2, 1]),
@@ -188,7 +200,8 @@ struct LevelConfig {
         row(4.0, r: [2, 3, 4], s: [1, 2, 1], h: [1, 2, 0], rocks: 20, mirrors: 14, spares: [0, 2, 0], carriers: [2, 1]),
         row(4.0, r: [2, 3, 4], s: [1, 2, 2], h: [1, 2, 0], rocks: 20, mirrors: 14, spares: [0, 2, 0], carriers: [2, 1]),
         row(4.0, r: [2, 3, 4], s: [1, 2, 2], h: [1, 2, 0], rocks: 20, mirrors: 14, spares: [0, 2, 0], carriers: [2, 1]),
-        row(4.0, r: [2, 3, 4], s: [1, 2, 3], h: [1, 2, 0], rocks: 21, mirrors: 14, spares: [0, 2, 0], carriers: [2, 1]),
+        row(4.0, r: [2, 3, 4], s: [1, 2, 3], h: [1, 2, 0], rocks: 21, mirrors: 14, spares: [0, 2, 0], carriers: [2, 1], fortress: true), // 75 · fortress
+
         row(4.0, r: [2, 3, 4], s: [1, 2, 3], h: [1, 2, 0], rocks: 21, mirrors: 15, spares: [0, 2, 0], carriers: [2, 1]),
         row(4.0, r: [2, 3, 4], s: [1, 2, 4], h: [1, 2, 0], rocks: 21, mirrors: 15, spares: [0, 2, 0], carriers: [2, 1]),
         row(4.0, r: [2, 3, 4], s: [1, 2, 4], h: [1, 2, 0], rocks: 21, mirrors: 15, spares: [0, 2, 0], carriers: [2, 1]),
@@ -199,7 +212,7 @@ struct LevelConfig {
         row(4.5, r: [2, 2, 4], s: [1, 2, 3], h: [1, 1, 1], rocks: 22, mirrors: 16, spares: [0, 2, 0], carriers: [2, 1]),
         row(4.5, r: [2, 2, 4], s: [1, 2, 3], h: [1, 1, 1], rocks: 23, mirrors: 16, spares: [0, 2, 0], carriers: [2, 1]),
         row(4.5, r: [2, 2, 4], s: [1, 2, 3], h: [1, 1, 2], rocks: 23, mirrors: 16, spares: [0, 2, 0], carriers: [2, 1]),
-        row(4.5, r: [2, 2, 4], s: [1, 2, 3], h: [1, 1, 2], rocks: 23, mirrors: 16, spares: [0, 2, 0], carriers: [2, 1]),
+        row(4.5, r: [2, 2, 4], s: [1, 2, 3], h: [1, 1, 2], rocks: 23, mirrors: 16, spares: [0, 2, 0], carriers: [2, 1], fortress: true), // 85 · fortress
         row(4.5, r: [2, 2, 4], s: [1, 2, 3], h: [1, 1, 2], rocks: 23, mirrors: 17, spares: [0, 2, 0], carriers: [2, 1]),
         row(4.5, r: [2, 2, 4], s: [1, 2, 3], h: [1, 1, 3], rocks: 24, mirrors: 17, spares: [0, 2, 0], carriers: [2, 1]),
         row(4.5, r: [2, 2, 4], s: [1, 2, 3], h: [1, 1, 3], rocks: 24, mirrors: 17, spares: [0, 2, 0], carriers: [2, 1]),
@@ -209,7 +222,8 @@ struct LevelConfig {
         row(5.0, r: [2, 2, 4], s: [1, 2, 3], h: [1, 1, 2], rocks: 25, mirrors: 18, spares: [0, 3, 0], carriers: [2, 2]),
         row(5.0, r: [2, 2, 5], s: [1, 2, 3], h: [1, 1, 2], rocks: 25, mirrors: 18, spares: [0, 3, 0], carriers: [2, 2]),
         row(5.0, r: [2, 2, 5], s: [1, 2, 4], h: [1, 1, 3], rocks: 25, mirrors: 18, spares: [0, 3, 0], carriers: [2, 2]),
-        row(5.0, r: [2, 2, 5], s: [1, 2, 4], h: [1, 1, 3], rocks: 26, mirrors: 18, spares: [0, 3, 0], carriers: [2, 2]),
+        row(5.0, r: [2, 2, 5], s: [1, 2, 4], h: [1, 1, 3], rocks: 26, mirrors: 18, spares: [0, 3, 0], carriers: [2, 2], fortress: true), // 95 · fortress
+
         row(5.0, r: [2, 2, 6], s: [1, 2, 4], h: [1, 1, 3], rocks: 26, mirrors: 19, spares: [0, 3, 0], carriers: [2, 2]),
         row(5.0, r: [2, 2, 6], s: [1, 2, 4], h: [1, 1, 3], rocks: 26, mirrors: 19, spares: [0, 3, 0], carriers: [2, 2]),
         row(5.0, r: [2, 2, 6], s: [1, 2, 5], h: [1, 1, 4], rocks: 26, mirrors: 19, spares: [0, 3, 0], carriers: [2, 2]),
