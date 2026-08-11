@@ -1236,7 +1236,7 @@ final class GameScene: SKScene {
     /// Console-style stick: direction = finger offset from the base center,
     /// speed scales with deflection (full player speed at the rim).
     private func updateJoystick(with touch: UITouch) {
-        guard let world, let cameraNode else { return }
+        guard gameStarted, let world, let cameraNode else { return }
         let location = touch.location(in: cameraNode)
         var dx = location.x - joystickCenter.x
         var dy = location.y - joystickCenter.y
@@ -1910,9 +1910,17 @@ final class GameScene: SKScene {
             ]))
         }
 
-        // Last one? Celebrate on the live scene, then report the win.
+        // Last one? Celebrate on the live scene, then report the win. The
+        // player halts on the spot — the round is over, no more steering
+        // (updateJoystick ignores input once gameStarted is false).
         if world?.bodies.contains(where: { $0.kind.isHostile }) == false {
             gameStarted = false
+            world?.playerControlVelocity = nil
+            world?.moveTarget = nil
+            if let pid = world?.playerID {
+                world?.setVelocity(.zero, forBodyID: pid)
+            }
+            joystickKnob?.position = .zero
             spawnWinCelebration()
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { [weak self] in
                 self?.onAllNPCsEliminated?()
