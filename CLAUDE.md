@@ -114,7 +114,8 @@ xcrun devicectl device process launch --device C3A2910A-B2BA-57B7-9A72-A21E30126
   buttons switch the laser, an empty pool auto-switches red→orange→white).
   Player shields (max 3, armor-ring look) each absorb one enemy laser hit —
   runner/boss touch and self-hits still kill; they spawn on levels with
-  tier-II+ regular enemies (2 map spares + 2 carriers). Special levels:
+  tier-II+ regular enemies, scaled to the shooting threat (one map spare +
+  one carrier per 4 shooters/hunters/shooting bosses, min 1 each). Special levels:
   x9 = all-mirror (no rocks), x5 = fortress (rock ring, one entrance,
   crossing it aggros everyone). Shooters open the game; runners join at 11.
   Death retries the same level; finishing level 100 wraps to level 1.

@@ -521,12 +521,20 @@ final class GameScene: SKScene {
         }
 
         // Player shields arrive with the first shielded REGULAR enemies
-        // (tier II+, level 31 on): two lie on the map, two ride designated
-        // armored carriers and drop where they die.
+        // (tier II+, level 31 on) and SCALE with the shooting threat: one
+        // map spare and one carrier per four shooting enemies (shooters +
+        // hunters + their bosses), at least one each. A flat 4 gave the
+        // early tier-II levels a surplus and the late 14-shooter levels a
+        // famine.
         let shieldedRegulars = config.runners.dropFirst().reduce(0, +)
             + config.shooters.dropFirst().reduce(0, +)
             + config.hunters.dropFirst().reduce(0, +)
-        var shieldCarriersLeft = shieldedRegulars > 0 ? 2 : 0
+        let shootingEnemies = config.shooters.reduce(0, +)
+            + config.hunters.reduce(0, +)
+            + config.bosses.filter { $0.kind != .runner }.count
+        let shieldRation = max(1, shootingEnemies / 4)
+        let mapShieldSpares = shieldedRegulars > 0 ? shieldRation : 0
+        var shieldCarriersLeft = shieldedRegulars > 0 ? min(shieldRation, 3) : 0
 
         // Shooters lurk right next to cover — rocks normally; on the
         // all-mirror levels (no rocks at all) they tuck in beside mirror
@@ -722,10 +730,10 @@ final class GameScene: SKScene {
         }
 
         // Map-spare shields, same placement rules as batteries.
-        if shieldedRegulars > 0 {
+        if mapShieldSpares > 0 {
             var placed = 0
             var attempts = 0
-            while placed < 2, attempts < 200 {
+            while placed < mapShieldSpares, attempts < 200 {
                 attempts += 1
                 guard let position = world.randomFreePosition(radius: 12, using: &rng),
                       position.distance(to: playerStart) > 150 else { continue }
