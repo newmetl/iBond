@@ -112,8 +112,9 @@ xcrun devicectl device process launch --device C3A2910A-B2BA-57B7-9A72-A21E30126
   Kill model: shield seconds ÷ battery power; white pierces everything.
   Batteries are ADDITIVE per-type reserves (pickups stack seconds; strip
   buttons switch the laser, an empty pool auto-switches red→orange→white).
-  Player shields (max 3, armor-ring look) each absorb one enemy laser hit —
-  runner/boss touch and self-hits still kill; they spawn on levels with
+  Player shields (max 3, armor-ring look) each absorb one laser hit (enemy
+  shots and reflected self-hits, which cut the beam) —
+  runner/boss/mine touch still kills; they spawn on levels with
   tier-II+ regular enemies, scaled to the shooting threat (one map spare +
   one carrier per 4 shooters/hunters/shooting bosses, min 1 each). Special levels:
   x9 = all-mirror (no rocks), x5 = fortress (rock ring, one entrance,

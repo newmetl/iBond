@@ -157,10 +157,10 @@ final class GameScene: SKScene {
     private var infiniteRedPickup: (position: CGPoint, node: SKShapeNode)?
 
     /// Player shields: armor rings exactly like the enemies wear. Each ring
-    /// absorbs one ENEMY LASER hit (shooter or hunter shot) and vanishes;
-    /// runner/boss touch and the player's own reflected beam ignore shields.
-    /// Pickups appear only on levels that field shielded regular enemies
-    /// (tier II+); the player stacks at most three.
+    /// absorbs one LASER hit — enemy shots AND the player's own reflected
+    /// beam — and vanishes; runner/boss/mine touch ignores shields. Pickups
+    /// appear only on levels that field shielded regular enemies (tier II+);
+    /// the player stacks at most three.
     private let maxPlayerShields = 3
     private var playerShields = 0
     private var shieldPickups: [(position: CGPoint, node: SKShapeNode)] = []
@@ -1498,8 +1498,16 @@ final class GameScene: SKScene {
             points = beam.points
             if let victimID = beam.bodyID {
                 if victimID == world.playerID {
-                    // A reflected beam looped back into the player: self-hit.
-                    killPlayer()
+                    // A reflected beam looped back into the player: a shield
+                    // absorbs this too, but the beam must cut out — held
+                    // fire would otherwise eat one ring per FRAME.
+                    if absorbLaserHit() {
+                        fireButtonHeld = false
+                        fireTouch = nil
+                        burstEndTime = 0
+                    }
+                    fadeOutBeamIfNeeded()
+                    return
                 } else if world.body(withID: victimID)?.kind.isHostile == true {
                     applyLaserDamage(to: victimID, world: world, hitPoint: endPoint)
                 }
@@ -1668,7 +1676,7 @@ final class GameScene: SKScene {
 
             if currentTime - start >= (shooterAimDurations[body.id] ?? EnemyTiers.shooterAim[0]) {
                 fireShooterBeam(from: body.position, to: player.position)
-                if absorbEnemyLaserHit() {
+                if absorbLaserHit() {
                     shooterAimStart[body.id] = nil // survived: the shooter re-aims
                 } else {
                     return
@@ -1797,7 +1805,7 @@ final class GameScene: SKScene {
               beam.points.count >= 2 else { return }
         fireShooterBeam(along: beam.points)
         if beam.bodyID == world.playerID {
-            absorbEnemyLaserHit()
+            absorbLaserHit()
         }
     }
 
@@ -2034,12 +2042,12 @@ final class GameScene: SKScene {
         }
     }
 
-    /// An enemy laser connected: a shield eats the hit (one ring bursts and
-    /// is gone) — only with no rings left does the player die. Runner/boss
-    /// touch and the player's own reflected beam never reach this path.
-    /// Returns true when the player survived.
+    /// A laser connected with the player — an enemy shot or their own
+    /// reflected beam: a shield eats the hit (one ring bursts and is gone) —
+    /// only with no rings left does the player die. Runner/boss/mine touch
+    /// never reaches this path. Returns true when the player survived.
     @discardableResult
-    private func absorbEnemyLaserHit() -> Bool {
+    private func absorbLaserHit() -> Bool {
         guard playerShields > 0 else {
             killPlayer()
             return false
