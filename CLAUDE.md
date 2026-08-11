@@ -89,9 +89,13 @@ xcrun devicectl device process launch --device C3A2910A-B2BA-57B7-9A72-A21E30126
 ## Architecture notes
 
 - Coordinates: SpriteKit bottom-left origin, points; engine world == scene
-  coords 1:1. Map is `mapScale`(3)× screen per dimension; SKCameraNode follows
-  inside an asymmetric margin box (bottom edge = screen center line) clamped to
-  the map. HUD/controls are children of the camera.
+  coords 1:1. Map is `mapScale`(3)× screen per dimension; SKCameraNode locks
+  straight onto the player every frame (centered in the visible play area
+  above the bottom control strip), clamped to the map. Both stick schemes
+  reserve an opaque control strip (min(190pt, 24% height)) at the screen
+  bottom: joystick left, battery-type buttons (and classic fire button)
+  right; `isOnScreen` excludes the covered zone. HUD/controls are children
+  of the camera.
 - Fixed timestep 1/120 via accumulator in `GameScene.update`; laser cast +
   gameplay checks run once per rendered frame after physics.
 - zPosition tiers: litter −2, beam −1, shooter aim −0.5, world circles 0,
@@ -106,6 +110,13 @@ xcrun devicectl device process launch --device C3A2910A-B2BA-57B7-9A72-A21E30126
   Per-level composition (map scale, per-tier enemy counts, obstacles, typed
   battery spares/carriers) plus tier/battery/boss stats: `App/Levels.swift`.
   Kill model: shield seconds ÷ battery power; white pierces everything.
+  Batteries are ADDITIVE per-type reserves (pickups stack seconds; strip
+  buttons switch the laser, an empty pool auto-switches red→orange→white).
+  Player shields (max 3, armor-ring look) each absorb one enemy laser hit —
+  runner/boss touch and self-hits still kill; they spawn on levels with
+  tier-II+ regular enemies (2 map spares + 2 carriers). Special levels:
+  x9 = all-mirror (no rocks), x5 = fortress (rock ring, one entrance,
+  crossing it aggros everyone). Shooters open the game; runners join at 11.
   Death retries the same level; finishing level 100 wraps to level 1.
   Design docs: `2026-08-09-tiers-batteries-bosses-plan.md` and
   `docs/superpowers/specs/2026-08-08-laser-taser-current-state.md`.
