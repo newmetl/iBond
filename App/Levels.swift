@@ -23,7 +23,9 @@ enum BatteryType: Int, CaseIterable {
 enum EnemyTiers {
     static let runnerSpeed = [130.0, 170.0, 210.0]
     static let runnerShield = [0.0, 0.5, 1.2]
-    static let shooterAim = [1.5, 1.1, 0.8]
+    /// Flat across tiers: faster aim on top of the tier II/III shields made
+    /// higher-tier shooters overwhelming — the shields alone are the upgrade.
+    static let shooterAim = [1.5, 1.5, 1.5]
     static let shooterShield = [0.0, 0.6, 1.4]
     static let hunterApproach = [190.0, 210.0, 230.0]
     static let hunterAim = [0.6, 0.5, 0.4]
@@ -50,7 +52,9 @@ enum BossStats {
     static let mass = 9.0
     static let patrolSpeed = 35.0
     static func runnerSpeed(tier: Int) -> Double { EnemyTiers.runnerSpeed[tier] * 0.55 }
-    static func shooterAim(tier: Int) -> Double { EnemyTiers.shooterAim[tier] * 0.93 }
+    /// Huge shooters keep their own per-tier aim ramp (the regular table went
+    /// flat at 1.5 — see EnemyTiers.shooterAim); a slow-aiming boss is trivial.
+    static func shooterAim(tier: Int) -> Double { [1.5, 1.1, 0.8][tier] * 0.93 }
     static func hunterApproach(tier: Int) -> Double { EnemyTiers.hunterApproach[tier] * 0.5 }
     static func hunterAim(tier: Int) -> Double { [0.8, 0.65, 0.5][tier] }
 }
