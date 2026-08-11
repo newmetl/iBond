@@ -92,4 +92,19 @@ final class WorldBodyTests: XCTestCase {
         world.remove(bodyID: id)
         XCTAssertTrue(world.bodies.isEmpty)
     }
+
+    func testSetRadiusChangesBodyRadius() {
+        let world = World(size: Vector2(400, 400))
+        let id = world.addRunner(at: Vector2(120, 80), radius: 42)
+        world.setRadius(30, forBodyID: id)
+        XCTAssertEqual(world.body(withID: id)?.radius, 30)
+    }
+
+    func testSetRadiusForUnknownBodyIsHarmless() {
+        let world = World(size: Vector2(400, 400))
+        let id = world.addRunner(at: Vector2(120, 80), radius: 42)
+        world.remove(bodyID: id)
+        world.setRadius(30, forBodyID: id) // no crash
+        XCTAssertTrue(world.bodies.isEmpty)
+    }
 }

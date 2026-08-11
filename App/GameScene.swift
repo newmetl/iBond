@@ -594,27 +594,23 @@ final class GameScene: SKScene {
 
         // Bosses: huge versions of regular kinds; behavior follows the kind.
         for spec in config.bosses {
-            // Huge runners are slimmer than the other bosses so they can
-            // squeeze through rock/mirror gaps instead of wedging.
-            let bossRadius = spec.kind == .runner ? BossStats.runnerRadius
-                                                  : BossStats.radius
             var placed = false
             var bossAttempts = 0
             while !placed, bossAttempts < 300 {
                 bossAttempts += 1
                 let position: Vector2
                 if config.fortress {
-                    guard let inside = fortressInteriorPosition(radius: bossRadius) else { continue }
+                    guard let inside = fortressInteriorPosition(radius: BossStats.radius) else { continue }
                     position = inside
                 } else {
-                    guard let free = world.randomFreePosition(radius: bossRadius, using: &rng),
+                    guard let free = world.randomFreePosition(radius: BossStats.radius, using: &rng),
                           free.distance(to: playerStart) > config.runnerMinPlayerDistance else { continue }
                     position = free
                 }
                 let id: BodyID
                 switch spec.kind {
                 case .runner:
-                    id = world.addRunner(at: position, radius: bossRadius,
+                    id = world.addRunner(at: position, radius: BossStats.radius,
                                          mass: BossStats.mass)
                     world.runnerSpeedOverrides[id] = BossStats.runnerSpeed(tier: spec.tier)
                 case .shooter:
@@ -1424,6 +1420,22 @@ final class GameScene: SKScene {
             for (ring, index) in rings {
                 let depletionStart = count - 1 - Double(index) // outermost first
                 ring.alpha = CGFloat(max(0, min(1, 1 - (Double(f) * count - depletionStart))))
+            }
+            // Huge runners shrink and accelerate as their shield burns —
+            // full body 42pt at full shield down to runnerMinRadius near
+            // death, chase speed up to 1.5× base. The weaker the boss, the
+            // smaller and faster the target. The node scales with the engine
+            // radius (rings and facing line ride along).
+            if bossIDs.contains(victimID),
+               world.body(withID: victimID)?.kind == .runner {
+                let progress = Double(f)
+                let radius = BossStats.radius
+                    - (BossStats.radius - BossStats.runnerMinRadius) * progress
+                world.setRadius(radius, forBodyID: victimID)
+                node.setScale(CGFloat(radius / BossStats.radius))
+                let tier = min(max(enemyTierIndex[victimID] ?? 0, 0), 2)
+                world.runnerSpeedOverrides[victimID] =
+                    BossStats.runnerSpeed(tier: tier) * (1 + 0.5 * progress)
             }
         }
     }

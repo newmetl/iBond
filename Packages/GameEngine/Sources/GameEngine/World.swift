@@ -224,6 +224,14 @@ public final class World {
         bodies[idx].velocity = velocity
     }
 
+    /// Gameplay hook: change a body's collision/hit radius mid-game (e.g. a
+    /// boss that shrinks as it takes damage). Collisions, laser hits, and
+    /// bounds clamping all follow the new radius from the next step on.
+    public func setRadius(_ radius: Double, forBodyID id: BodyID) {
+        guard let idx = bodies.firstIndex(where: { $0.id == id }) else { return }
+        bodies[idx].radius = radius
+    }
+
     /// Pairwise circle-circle response: positional separation weighted by inverse
     /// mass, plus a zero-restitution impulse so bodies push rather than bounce.
     private func resolveCollisions() {
