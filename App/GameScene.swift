@@ -135,6 +135,16 @@ final class GameScene: SKScene {
     private var currentReserve: Double { batteryReserves[batteryType] ?? 0 }
     private var batteryButtons: [BatteryType: SKShapeNode] = [:]
     private var batteryButtonLabels: [BatteryType: SKLabelNode] = [:]
+
+    /// Player shields: armor rings exactly like the enemies wear. Each ring
+    /// absorbs one ENEMY LASER hit (shooter or hunter shot) and vanishes;
+    /// runner/boss touch and the player's own reflected beam ignore shields.
+    /// Pickups appear only on levels that field shielded regular enemies
+    /// (tier II+); the player stacks at most three.
+    private let maxPlayerShields = 3
+    private var playerShields = 0
+    private var shieldPickups: [(position: CGPoint, node: SKShapeNode)] = []
+    private var shieldCarriers: Set<BodyID> = []
     private var batteryHUDNode: SKNode?
     private var batteryFillBar: SKSpriteNode?
     private var enemyDotsNode: SKNode?
@@ -236,6 +246,7 @@ final class GameScene: SKScene {
         processHunters(currentTime)
         checkTouchKills()
         checkBatteryPickups()
+        checkShieldPickups()
         updateBatteryHUD()
         updateEnemyDots()
         updateSounds()
@@ -321,6 +332,9 @@ final class GameScene: SKScene {
         seenEnemyIDs = []
         batteryCarriers = [:]
         batteryPickups = []
+        playerShields = 0
+        shieldPickups = []
+        shieldCarriers = []
         gameStarted = true
         SoundManager.shared.startMusic()
         ensureWorld() // builds now if the scene is laid out; else on next update
@@ -357,6 +371,14 @@ final class GameScene: SKScene {
             world.addRock(at: position, radius: radius)
         }
 
+        // Player shields arrive with the first shielded REGULAR enemies
+        // (tier II+, level 31 on): two lie on the map, two ride designated
+        // armored carriers and drop where they die.
+        let shieldedRegulars = config.runners.dropFirst().reduce(0, +)
+            + config.shooters.dropFirst().reduce(0, +)
+            + config.hunters.dropFirst().reduce(0, +)
+        var shieldCarriersLeft = shieldedRegulars > 0 ? 2 : 0
+
         // Shooters lurk right next to rocks (their cover), never near the
         // player's spawn. The first `shooterRedCarriers` carry Red batteries.
         let rocks = world.rockIDs.compactMap { world.body(withID: $0) }
@@ -388,6 +410,10 @@ final class GameScene: SKScene {
                     batteryCarriers[id] = .red
                     shooterCarriersLeft -= 1
                 }
+                if tier >= 1, shieldCarriersLeft > 0 {
+                    shieldCarriers.insert(id)
+                    shieldCarriersLeft -= 1
+                }
                 placed += 1
             }
         }
@@ -403,6 +429,10 @@ final class GameScene: SKScene {
                 world.runnerSpeedOverrides[id] = EnemyTiers.runnerSpeed[tier]
                 shieldSeconds[id] = EnemyTiers.runnerShield[tier]
                 enemyTierIndex[id] = tier
+                if tier >= 1, shieldCarriersLeft > 0 {
+                    shieldCarriers.insert(id)
+                    shieldCarriersLeft -= 1
+                }
                 placed += 1
             }
         }
@@ -425,6 +455,10 @@ final class GameScene: SKScene {
                 if hunterCarriersLeft > 0 {
                     batteryCarriers[id] = .orange
                     hunterCarriersLeft -= 1
+                }
+                if tier >= 1, shieldCarriersLeft > 0 {
+                    shieldCarriers.insert(id)
+                    shieldCarriersLeft -= 1
                 }
                 placed += 1
             }
@@ -479,6 +513,19 @@ final class GameScene: SKScene {
                 placed += 1
             }
         }
+
+        // Map-spare shields, same placement rules as batteries.
+        if shieldedRegulars > 0 {
+            var placed = 0
+            var attempts = 0
+            while placed < 2, attempts < 200 {
+                attempts += 1
+                guard let position = world.randomFreePosition(radius: 12, using: &rng),
+                      position.distance(to: playerStart) > 150 else { continue }
+                spawnShieldPickup(at: position)
+                placed += 1
+            }
+        }
     }
 
     private func buildNodes(for world: World) {
@@ -515,6 +562,17 @@ final class GameScene: SKScene {
                                     fill: SKColor(red: 0.2, green: 0.85, blue: 1, alpha: 1))
         player.zPosition = 1 // above NPCs so overlap during shoves renders stably
         player.addChild(makeAimLineNode())
+        // Shield rings — the same look as enemy armor; one lights up per
+        // collected shield (innermost first), see updatePlayerShieldRings.
+        for ring in 0..<maxPlayerShields {
+            let armor = SKShapeNode(circleOfRadius: playerRadius + 4 + CGFloat(ring) * 4)
+            armor.name = "playerShield\(ring)"
+            armor.strokeColor = SKColor(white: 0.95, alpha: 0.75)
+            armor.lineWidth = 1.5
+            armor.fillColor = .clear
+            armor.isHidden = true
+            player.addChild(armor)
+        }
         addChild(player)
         playerNode = player
 
@@ -1290,8 +1348,11 @@ final class GameScene: SKScene {
 
             if currentTime - start >= (shooterAimDurations[body.id] ?? EnemyTiers.shooterAim[0]) {
                 fireShooterBeam(from: body.position, to: player.position)
-                killPlayer()
-                return
+                if absorbEnemyLaserHit() {
+                    shooterAimStart[body.id] = nil // survived: the shooter re-aims
+                } else {
+                    return
+                }
             }
         }
     }
@@ -1413,7 +1474,7 @@ final class GameScene: SKScene {
               beam.points.count >= 2 else { return }
         fireShooterBeam(along: beam.points)
         if beam.bodyID == world.playerID {
-            killPlayer()
+            absorbEnemyLaserHit()
         }
     }
 
@@ -1508,6 +1569,95 @@ final class GameScene: SKScene {
         }
     }
 
+    // MARK: - Player shields
+
+    /// Shows one armor ring per collected shield, innermost first.
+    private func updatePlayerShieldRings() {
+        guard let playerNode else { return }
+        for ring in 0..<maxPlayerShields {
+            playerNode.childNode(withName: "playerShield\(ring)")?.isHidden =
+                ring >= playerShields
+        }
+    }
+
+    /// A shield lying on the map: concentric armor rings, pulsing gently.
+    private func spawnShieldPickup(at position: Vector2) {
+        let node = SKShapeNode(circleOfRadius: 12)
+        node.strokeColor = SKColor(white: 0.95, alpha: 0.85)
+        node.lineWidth = 1.5
+        node.fillColor = .clear
+        node.glowWidth = 2
+        node.zPosition = 0.5
+        node.position = CGPoint(x: position.x, y: position.y)
+        let inner = SKShapeNode(circleOfRadius: 7)
+        inner.strokeColor = SKColor(white: 0.95, alpha: 0.85)
+        inner.lineWidth = 1.5
+        inner.fillColor = .clear
+        node.addChild(inner)
+        node.run(.repeatForever(.sequence([
+            .scale(to: 1.15, duration: 0.4),
+            .scale(to: 0.9, duration: 0.4),
+        ])))
+        addChild(node)
+        shieldPickups.append((node.position, node))
+    }
+
+    /// Collects touched shields up to the cap — a full player (3 rings)
+    /// leaves further shields lying for later.
+    private func checkShieldPickups() {
+        guard gameStarted, playerShields < maxPlayerShields, let world,
+              let pid = world.playerID, let player = world.body(withID: pid) else { return }
+        shieldPickups.removeAll { pickup in
+            guard playerShields < maxPlayerShields else { return false }
+            let distance = player.position.distance(to: Vector2(pickup.position.x, pickup.position.y))
+            guard distance <= player.radius + 14 else { return false }
+            playerShields += 1
+            updatePlayerShieldRings()
+            pickup.node.run(.sequence([
+                .group([
+                    .scale(to: 1.8, duration: 0.2),
+                    .fadeOut(withDuration: 0.2),
+                ]),
+                .removeFromParent(),
+            ]))
+            spawnRechargeEffect(at: player.position)
+            return true
+        }
+    }
+
+    /// An enemy laser connected: a shield eats the hit (one ring bursts and
+    /// is gone) — only with no rings left does the player die. Runner/boss
+    /// touch and the player's own reflected beam never reach this path.
+    /// Returns true when the player survived.
+    @discardableResult
+    private func absorbEnemyLaserHit() -> Bool {
+        guard playerShields > 0 else {
+            killPlayer()
+            return false
+        }
+        playerShields -= 1
+        updatePlayerShieldRings()
+        SoundManager.shared.playOuch()
+        if let playerNode {
+            let burst = SKShapeNode(circleOfRadius: playerRadius + 8)
+            burst.strokeColor = SKColor(white: 1, alpha: 0.9)
+            burst.lineWidth = 3
+            burst.glowWidth = 4
+            burst.fillColor = .clear
+            burst.position = playerNode.position
+            burst.zPosition = 1.6
+            addChild(burst)
+            burst.run(.sequence([
+                .group([
+                    .scale(to: 2.0, duration: 0.3),
+                    .fadeOut(withDuration: 0.3),
+                ]),
+                .removeFromParent(),
+            ]))
+        }
+        return true
+    }
+
     /// Energy-hit feedback on collecting a spare: a green ring bursts out of
     /// the player and the battery icon pulses.
     private func spawnRechargeEffect(at position: Vector2) {
@@ -1567,9 +1717,13 @@ final class GameScene: SKScene {
         addChild(burst)
         burst.run(.sequence([.fadeOut(withDuration: 0.25), .removeFromParent()]))
 
-        // Battery carriers leave their battery where they fell.
+        // Battery carriers leave their battery where they fell; shield
+        // carriers their shield.
         if let type = batteryCarriers.removeValue(forKey: npcID), let dropPosition {
             spawnBatteryPickup(at: dropPosition, type: type)
+        }
+        if shieldCarriers.remove(npcID) != nil, let dropPosition {
+            spawnShieldPickup(at: dropPosition)
         }
         shooterAimStart[npcID] = nil
         shooterAimNodes.removeValue(forKey: npcID)?.removeFromParent()
