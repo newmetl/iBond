@@ -316,7 +316,12 @@ final class GameScene: SKScene {
     /// Starts a fresh game on the given level: tears down any previous
     /// world/nodes and builds a new one (player centered, NPCs re-randomized).
     /// Called from the menu / continue / restart overlay.
-    func startGame(level: Int) {
+    ///
+    /// `carryOver` (level finished → next level) keeps the battery reserves
+    /// and shields; red is topped up to at least one full capacity — 3s of
+    /// red laser is the guaranteed minimum every level starts with. Without
+    /// carry-over (menu, death, dev picks) everything resets to exactly that.
+    func startGame(level: Int, carryOver: Bool = false) {
         self.level = level
         config = LevelConfig.forLevel(level)
         removeAllChildren()
@@ -339,8 +344,14 @@ final class GameScene: SKScene {
         batteryHUDNode = nil
         enemyDotsNode = nil
         lastEnemyDotIDs = []
-        batteryType = .red
-        batteryReserves = [.red: BatteryType.red.capacity]
+        if carryOver {
+            batteryReserves[.red] = max(batteryReserves[.red] ?? 0,
+                                        BatteryType.red.capacity)
+            if currentReserve <= 0 { batteryType = .red }
+        } else {
+            batteryType = .red
+            batteryReserves = [.red: BatteryType.red.capacity]
+        }
         batteryButtons = [:]
         batteryButtonFills = [:]
         batteryButtonLabels = [:]
@@ -361,7 +372,7 @@ final class GameScene: SKScene {
         seenEnemyIDs = []
         batteryCarriers = [:]
         batteryPickups = []
-        playerShields = 0
+        if !carryOver { playerShields = 0 }
         shieldPickups = []
         shieldCarriers = []
         fortressCenter = nil
@@ -622,6 +633,7 @@ final class GameScene: SKScene {
 
         self.world = world
         buildNodes(for: world)
+        updatePlayerShieldRings() // carried-over shields show from frame one
 
         // Typed map spares, never right next to the spawn.
         for (type, count) in [(BatteryType.red, config.redSpares),

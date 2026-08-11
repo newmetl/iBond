@@ -72,10 +72,13 @@ struct GameView: View {
                         .font(.system(size: 52, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
                     Button(buttonTitle) {
+                        // Beating a level carries batteries + shields into the
+                        // next one; death, menu, and a fresh run reset them.
+                        let carryOver = phase == .finished && !wonTheGame
                         if phase == .finished {
                             level = wonTheGame ? 1 : level + 1
                         }
-                        start(level: level)
+                        start(level: level, carryOver: carryOver)
                     }
                     .font(.title2.bold())
                     .buttonStyle(.borderedProminent)
@@ -124,9 +127,9 @@ struct GameView: View {
     }
 
     /// Applies the selected control scheme and starts the given level.
-    private func start(level: Int) {
+    private func start(level: Int, carryOver: Bool = false) {
         scene.controlScheme = ControlScheme(rawValue: controlSchemeRaw) ?? .joystick
-        scene.startGame(level: level)
+        scene.startGame(level: level, carryOver: carryOver)
         phase = .playing
     }
 
