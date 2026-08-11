@@ -405,7 +405,6 @@ final class GameScene: SKScene {
         // there makes a bare red start a slog). Carry-over keeps anything
         // above the minimums.
         if !carryOver {
-            batteryType = .red
             batteryReserves = [:]
         }
         batteryReserves[.red] = max(batteryReserves[.red] ?? 0,
@@ -414,7 +413,13 @@ final class GameScene: SKScene {
             batteryReserves[.orange] = max(batteryReserves[.orange] ?? 0,
                                            BatteryType.orange.capacity)
         }
-        if currentReserve <= 0 { batteryType = .red }
+        // Fresh starts (death retries included) pre-select the strongest
+        // loaded type — from level 55 that's Orange. Carry-over keeps the
+        // previous selection unless its pool is empty.
+        if !carryOver || currentReserve <= 0 {
+            batteryType = BatteryType.allCases.reversed()
+                .first { (batteryReserves[$0] ?? 0) > 0 } ?? .red
+        }
         batteryButtons = [:]
         batteryButtonFills = [:]
         batteryButtonLabels = [:]
@@ -890,7 +895,7 @@ final class GameScene: SKScene {
         }
 
         let laser = SKShapeNode()
-        laser.strokeColor = SKColor(red: 1, green: 0.2, blue: 0.3, alpha: 1)
+        laser.strokeColor = batteryColor(batteryType) // may start as Orange (L55+)
         laser.lineWidth = 1.5
         laser.isHidden = true
         laser.zPosition = -1 // beam under the circles
