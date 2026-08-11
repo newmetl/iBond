@@ -134,6 +134,7 @@ final class GameScene: SKScene {
     private var batteryReserves: [BatteryType: Double] = [:]
     private var currentReserve: Double { batteryReserves[batteryType] ?? 0 }
     private var batteryButtons: [BatteryType: SKShapeNode] = [:]
+    private var batteryButtonFills: [BatteryType: SKSpriteNode] = [:]
     private var batteryButtonLabels: [BatteryType: SKLabelNode] = [:]
 
     /// Player shields: armor rings exactly like the enemies wear. Each ring
@@ -152,7 +153,6 @@ final class GameScene: SKScene {
     private var fortressRadius: Double = 0
     private var fortressBreached = false
     private var batteryHUDNode: SKNode?
-    private var batteryFillBar: SKSpriteNode?
     private var enemyDotsNode: SKNode?
     private var lastEnemyDotIDs: Set<BodyID> = []
     private var frameDt: Double = 0   // last frame's clamped wall-clock dt
@@ -337,12 +337,12 @@ final class GameScene: SKScene {
         fireTouch = nil
         burstEndTime = 0
         batteryHUDNode = nil
-        batteryFillBar = nil
         enemyDotsNode = nil
         lastEnemyDotIDs = []
         batteryType = .red
         batteryReserves = [.red: BatteryType.red.capacity]
         batteryButtons = [:]
+        batteryButtonFills = [:]
         batteryButtonLabels = [:]
         beamVisible = false
         shooterAimStart = [:]
@@ -835,14 +835,29 @@ final class GameScene: SKScene {
             }
 
             // Laser-type buttons, stacked on the strip's right (next to the
-            // fire button in the classic scheme). One per battery type; each
+            // fire button in the classic scheme). Each is drawn AS a battery:
+            // outlined body with a tip, filled to its pool's charge level in
+            // the type's color, seconds on top. One per battery type; each
             // appears only while its pool has charge — see updateBatteryHUD.
             for type in BatteryType.allCases {
-                let button = SKShapeNode(rectOf: batteryButtonSize, cornerRadius: 10)
+                let button = SKShapeNode(rectOf: batteryButtonSize, cornerRadius: 7)
                 button.zPosition = 3
                 button.isHidden = true
+                button.fillColor = SKColor(white: 0, alpha: 0.35)
                 camera.addChild(button)
                 batteryButtons[type] = button
+
+                let tip = SKShapeNode(rectOf: CGSize(width: 5, height: 16), cornerRadius: 2)
+                tip.strokeColor = .clear
+                tip.fillColor = SKColor(white: 1, alpha: 0.85)
+                tip.position = CGPoint(x: batteryButtonSize.width / 2 + 4, y: 0)
+                button.addChild(tip)
+
+                let fill = SKSpriteNode(color: batteryColor(type), size: .zero)
+                fill.anchorPoint = CGPoint(x: 0, y: 0.5)
+                fill.position = CGPoint(x: -batteryButtonSize.width / 2 + 4, y: 0)
+                button.addChild(fill)
+                batteryButtonFills[type] = fill
 
                 let label = SKLabelNode(text: "")
                 label.fontName = "HelveticaNeue-Bold"
@@ -856,8 +871,8 @@ final class GameScene: SKScene {
             layoutBatteryButtons()
         }
 
-        // Battery HUD (rides the camera): icon with a color-coded charge bar;
-        // slightly transparent so it doesn't compete with the action.
+        // Top HUD (rides the camera): just the current level and the enemy
+        // dot row — the battery state lives on the strip buttons below.
         let hud = SKNode()
         hud.position = CGPoint(x: 0, y: size.height / 2 - 80)
         hud.zPosition = 3
@@ -865,33 +880,13 @@ final class GameScene: SKScene {
         camera.addChild(hud)
         batteryHUDNode = hud
 
-        let iconBody = SKShapeNode(rectOf: CGSize(width: 26, height: 13), cornerRadius: 2.5)
-        iconBody.strokeColor = SKColor(white: 1, alpha: 0.85)
-        iconBody.lineWidth = 1.5
-        iconBody.fillColor = .clear
-        iconBody.position = .zero
-        hud.addChild(iconBody)
-
-        let iconTip = SKShapeNode(rectOf: CGSize(width: 3, height: 6), cornerRadius: 1)
-        iconTip.strokeColor = .clear
-        iconTip.fillColor = SKColor(white: 1, alpha: 0.85)
-        iconTip.position = CGPoint(x: 15.5, y: 0)
-        hud.addChild(iconTip)
-
-        let fill = SKSpriteNode(color: .green, size: CGSize(width: 22, height: 9))
-        fill.anchorPoint = CGPoint(x: 0, y: 0.5)
-        fill.position = CGPoint(x: -11, y: 0)
-        hud.addChild(fill)
-        batteryFillBar = fill
-
-        // Current level, to the left of the battery icon.
         let levelLabel = SKLabelNode(text: level == 0 ? "TEST" : "LVL \(level)")
         levelLabel.fontName = "HelveticaNeue-Bold"
         levelLabel.fontSize = 13
         levelLabel.fontColor = SKColor(white: 1, alpha: 0.85)
-        levelLabel.horizontalAlignmentMode = .right
+        levelLabel.horizontalAlignmentMode = .center
         levelLabel.verticalAlignmentMode = .center
-        levelLabel.position = CGPoint(x: -32, y: 0)
+        levelLabel.position = .zero
         hud.addChild(levelLabel)
 
         // One dot per remaining enemy, in the enemy's color (see updateEnemyDots).
@@ -966,15 +961,10 @@ final class GameScene: SKScene {
     }
 
     private func updateBatteryHUD() {
-        // The bar's color IS the selected type; its width shows that pool's
-        // charge (capped at one full capacity — reserves can stack higher,
-        // the buttons carry the exact seconds).
-        let fraction = CGFloat(min(1, currentReserve / batteryType.capacity))
-        batteryFillBar?.size = CGSize(width: 22 * max(0, fraction), height: 9)
-        batteryFillBar?.color = batteryColor(batteryType)
-
-        // Strip buttons: visible only for types with charge; the selected one
-        // wears a white outline. Labels show the whole pool in seconds.
+        // Strip batteries: visible only for types with charge; the selected
+        // one wears a white outline. The fill level shows the pool against
+        // one full capacity (stacked reserves cap the bar and carry the
+        // surplus in the seconds label).
         for type in BatteryType.allCases {
             guard let button = batteryButtons[type] else { continue }
             let reserve = batteryReserves[type] ?? 0
@@ -982,8 +972,11 @@ final class GameScene: SKScene {
             let selected = type == batteryType
             button.strokeColor = selected ? .white : batteryColor(type)
             button.lineWidth = selected ? 2.5 : 1.5
-            button.fillColor = batteryColor(type)
-                .withAlphaComponent(selected ? 0.45 : 0.16)
+            let fraction = CGFloat(min(1, reserve / type.capacity))
+            batteryButtonFills[type]?.size = CGSize(
+                width: (batteryButtonSize.width - 8) * fraction,
+                height: batteryButtonSize.height - 8)
+            batteryButtonFills[type]?.alpha = selected ? 0.9 : 0.45
             batteryButtonLabels[type]?.text = String(format: "%.2fs", reserve)
         }
     }
