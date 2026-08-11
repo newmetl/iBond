@@ -160,12 +160,11 @@ final class GameScene: SKScene {
     private var fortressRadius: Double = 0
     private var fortressBreached = false
 
-    /// Proximity mines (level 51 on): tiny dormant bodies that pulse slowly
-    /// where they lie. Coming within `mineTriggerDistance` arms one for good;
-    /// armed mines home in magnetically and accelerate every frame. Laser
-    /// only — but at half a regular enemy's radius they're hard to hit.
-    private let mineRadius: Double = 7
-    private let mineTriggerDistance: Double = 130
+    /// Mines (level 51 on): tiny dormant bodies that pulse slowly where they
+    /// lie. Scrolling one into view arms it for good; armed mines home in
+    /// magnetically and accelerate every frame. Laser only — and at nearly a
+    /// third of a regular enemy's radius they're hard to hit.
+    private let mineRadius: Double = 5
     private let mineStartSpeed: Double = 40
     private let mineAcceleration: Double = 55
     private let mineMaxSpeed: Double = 380
@@ -1762,9 +1761,9 @@ final class GameScene: SKScene {
         }
     }
 
-    /// Mines sleep where they lie until the player strays inside the trigger
-    /// range, then arm FOR GOOD: they home in magnetically and accelerate a
-    /// little more every frame. Only the laser stops them.
+    /// Mines sleep where they lie until they first scroll into view, then arm
+    /// FOR GOOD: they home in magnetically and accelerate a little more every
+    /// frame. Only the laser stops them.
     private func processMines() {
         guard let world else { return }
         guard gameStarted, let pid = world.playerID,
@@ -1776,7 +1775,7 @@ final class GameScene: SKScene {
         }
         for body in world.bodies where body.kind == .mine {
             if !activeMineIDs.contains(body.id) {
-                guard body.position.distance(to: player.position) < mineTriggerDistance
+                guard isOnScreen(position: body.position, radius: body.radius)
                 else { continue }
                 armMine(body.id)
             }
