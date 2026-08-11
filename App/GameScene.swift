@@ -144,6 +144,18 @@ final class GameScene: SKScene {
     private var batteryButtonFills: [BatteryType: SKSpriteNode] = [:]
     private var batteryButtonLabels: [BatteryType: SKLabelNode] = [:]
 
+    /// The INFINITE RED battery: a one-time special item. From level 59 on,
+    /// one lies in every level until the player grabs it; owning it makes
+    /// the red laser bottomless and survives deaths, level changes, and app
+    /// restarts. Starting any level below 59 (dev picks, the post-100 wrap)
+    /// revokes it — it must be found again from 59 on.
+    private let infiniteRedMinLevel = 59
+    private var hasInfiniteRed: Bool {
+        get { UserDefaults.standard.bool(forKey: "hasInfiniteRedBattery") }
+        set { UserDefaults.standard.set(newValue, forKey: "hasInfiniteRedBattery") }
+    }
+    private var infiniteRedPickup: (position: CGPoint, node: SKShapeNode)?
+
     /// Player shields: armor rings exactly like the enemies wear. Each ring
     /// absorbs one ENEMY LASER hit (shooter or hunter shot) and vanishes;
     /// runner/boss touch and the player's own reflected beam ignore shields.
@@ -404,6 +416,10 @@ final class GameScene: SKScene {
         // from level 55 on also one full Orange (the tier-II/III shield mass
         // there makes a bare red start a slog). Carry-over keeps anything
         // above the minimums.
+        // Dropping below level 59 (dev selector, the post-100 wrap) takes
+        // the one-time infinite red away again.
+        if level < infiniteRedMinLevel { hasInfiniteRed = false }
+        infiniteRedPickup = nil
         if !carryOver {
             batteryReserves = [:]
         }
@@ -745,6 +761,19 @@ final class GameScene: SKScene {
                       position.distance(to: playerStart) > 150 else { continue }
                 spawnBatteryPickup(at: position, type: type)
                 placed += 1
+            }
+        }
+
+        // The one-time INFINITE RED: from level 59 on one lies somewhere in
+        // every level until the player finally grabs it.
+        if level >= infiniteRedMinLevel, !hasInfiniteRed {
+            var attempts = 0
+            while attempts < 200 {
+                attempts += 1
+                guard let position = world.randomFreePosition(radius: 12, using: &rng),
+                      position.distance(to: playerStart) > 150 else { continue }
+                spawnInfiniteRedPickup(at: position)
+                break
             }
         }
 
@@ -1098,16 +1127,18 @@ final class GameScene: SKScene {
         for type in BatteryType.allCases {
             guard let button = batteryButtons[type] else { continue }
             let reserve = batteryReserves[type] ?? 0
-            button.isHidden = reserve <= 0
+            let infinite = type == .red && hasInfiniteRed
+            button.isHidden = !infinite && reserve <= 0
             let selected = type == batteryType
             button.strokeColor = selected ? .white : batteryColor(type)
             button.lineWidth = selected ? 2.5 : 1.5
-            let fraction = CGFloat(min(1, reserve / type.capacity))
+            let fraction = infinite ? 1 : CGFloat(min(1, reserve / type.capacity))
             batteryButtonFills[type]?.size = CGSize(
                 width: (batteryButtonSize.width - 8) * fraction,
                 height: batteryButtonSize.height - 8)
             batteryButtonFills[type]?.alpha = selected ? 0.9 : 0.45
-            batteryButtonLabels[type]?.text = String(format: "%.2fs", reserve)
+            batteryButtonLabels[type]?.text =
+                infinite ? "∞" : String(format: "%.2fs", reserve)
         }
     }
 
@@ -1492,9 +1523,11 @@ final class GameScene: SKScene {
         // This runs after the kill so a last-kill-on-last-drop tie counts as
         // a win. Running dry auto-switches to the next type with charge; all
         // pools empty is NOT game over, the laser just can't fire until the
-        // player collects another battery.
-        batteryReserves[batteryType] = max(0, currentReserve - frameDt)
-        if currentReserve <= 0 { autoSwitchBattery() }
+        // player collects another battery. The infinite red never drains.
+        if !(batteryType == .red && hasInfiniteRed) {
+            batteryReserves[batteryType] = max(0, currentReserve - frameDt)
+            if currentReserve <= 0 { autoSwitchBattery() }
+        }
     }
 
     /// Selects the given battery type: the beam color and the strip buttons
@@ -1878,9 +1911,50 @@ final class GameScene: SKScene {
         batteryPickups.append((node.position, node, type))
     }
 
+    /// The golden-rimmed infinite red battery, marked with an ∞.
+    private func spawnInfiniteRedPickup(at position: Vector2) {
+        let node = SKShapeNode(rectOf: CGSize(width: 14, height: 20), cornerRadius: 3)
+        node.fillColor = batteryColor(.red)
+        node.strokeColor = SKColor(red: 1, green: 0.85, blue: 0.3, alpha: 1)
+        node.lineWidth = 2
+        node.glowWidth = 6
+        node.zPosition = 0.5
+        node.position = CGPoint(x: position.x, y: position.y)
+        let label = SKLabelNode(text: "∞")
+        label.fontName = "HelveticaNeue-Bold"
+        label.fontSize = 13
+        label.fontColor = .white
+        label.horizontalAlignmentMode = .center
+        label.verticalAlignmentMode = .center
+        node.addChild(label)
+        node.run(.repeatForever(.sequence([
+            .scale(to: 1.25, duration: 0.4),
+            .scale(to: 0.9, duration: 0.4),
+        ])))
+        addChild(node)
+        infiniteRedPickup = (node.position, node)
+    }
+
     private func checkBatteryPickups() {
         guard gameStarted, let world, let pid = world.playerID,
               let player = world.body(withID: pid) else { return }
+        if let pickup = infiniteRedPickup,
+           player.position.distance(to: Vector2(pickup.position.x, pickup.position.y))
+               <= player.radius + 14 {
+            // Owned for good (persisted): the red pool is bottomless from
+            // here on — until a sub-59 level start takes it away again.
+            hasInfiniteRed = true
+            infiniteRedPickup = nil
+            if currentReserve <= 0 { selectBattery(.red) }
+            pickup.node.run(.sequence([
+                .group([
+                    .scale(to: 1.8, duration: 0.2),
+                    .fadeOut(withDuration: 0.2),
+                ]),
+                .removeFromParent(),
+            ]))
+            spawnRechargeEffect(at: player.position)
+        }
         batteryPickups.removeAll { pickup in
             let distance = player.position.distance(to: Vector2(pickup.position.x, pickup.position.y))
             guard distance <= player.radius + 14 else { return false }
