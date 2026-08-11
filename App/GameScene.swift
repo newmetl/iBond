@@ -51,23 +51,6 @@ final class GameScene: SKScene {
     /// batteries, spawn distances) lives in the level table: Levels.swift.
     private var level = 1
     private var config = LevelConfig.forLevel(1)
-    /// Camera follow box: the camera scrolls once the player crosses these
-    /// margins, expressed as fractions of the half-screen. Portrait matches
-    /// the original 175pt side / 280pt top margins (on a 402×874 screen).
-    /// Landscape trades the axes: near-zero horizontal slack so the camera
-    /// leads sideways movement early (half a screen of look-ahead toward
-    /// approaching runners), but generous vertical slack because the short
-    /// axis would otherwise scroll on every wiggle. The box bottom always
-    /// sits at 50% of the screen so downward movement scrolls from the
-    /// center line (the corner controls live below it).
-    private let portraitMarginXFraction: CGFloat = 0.87
-    private let portraitMarginTopFraction: CGFloat = 0.64
-    /// 0.8 gives ±87pt of horizontal slack (0.94's ±26pt scrolled on
-    /// every step and felt twitchy).
-    private let landscapeMarginXFraction: CGFloat = 0.8
-    /// 0.8 keeps the player ~160pt clear of the top edge (0.35 and 0.6 both
-    /// still read as "no warning" for runners entering from above).
-    private let landscapeMarginTopFraction: CGFloat = 0.8
     /// Decorative litter density is constant per screen of map area
     /// (about 200 pieces on the original 3×3 map).
     private let litterPerScreen = 22
@@ -1108,26 +1091,14 @@ final class GameScene: SKScene {
 
     // MARK: - Camera
 
-    /// The camera stays put while the player is inside the follow box, then
-    /// moves just enough to keep them on its edge — clamped to the map.
+    /// The camera tracks the player directly — every step of movement scrolls
+    /// the view immediately (no follow box) — clamped to the map.
     private func updateCamera() {
         guard let world, let cameraNode,
               let player = world.playerID.flatMap({ world.body(withID: $0) }) else { return }
-        var cam = cameraNode.position
         let halfW = size.width / 2
         let halfH = size.height / 2
-        let isLandscape = size.width > size.height
-        let marginX = halfW * (isLandscape ? landscapeMarginXFraction
-                                           : portraitMarginXFraction)
-        let marginTop = halfH * (isLandscape ? landscapeMarginTopFraction
-                                             : portraitMarginTopFraction)
-        let marginBottom = halfH // box bottom = screen center line
-        let px = CGFloat(player.position.x)
-        let py = CGFloat(player.position.y)
-        if px > cam.x + halfW - marginX { cam.x = px - (halfW - marginX) }
-        if px < cam.x - halfW + marginX { cam.x = px + (halfW - marginX) }
-        if py > cam.y + halfH - marginTop { cam.y = py - (halfH - marginTop) }
-        if py < cam.y - halfH + marginBottom { cam.y = py + (halfH - marginBottom) }
+        var cam = CGPoint(x: CGFloat(player.position.x), y: CGFloat(player.position.y))
         cam.x = min(max(cam.x, halfW), CGFloat(world.size.x) - halfW)
         cam.y = min(max(cam.y, halfH), CGFloat(world.size.y) - halfH)
         cameraNode.position = cam
