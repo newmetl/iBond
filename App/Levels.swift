@@ -103,27 +103,29 @@ struct LevelConfig {
                                 rocks: 8, mirrors: 6, spares: [1, 1, 0],
                                 carriers: [0, 1])
 
+    // Decade 1 belongs to SHOOTERS (the gentler kind — ambush, dodgeable
+    // telegraph); runners (relentless chase, touch = death) join at 11.
     static let all: [LevelConfig] = [
-        row(1.0, r: [2, 0, 0], s: [0, 0, 0], h: [0, 0, 0], rocks: 0, mirrors: 0, spares: [0, 0, 0], carriers: [0, 0]), // 1
-        row(1.0, r: [3, 0, 0], s: [0, 0, 0], h: [0, 0, 0], rocks: 0, mirrors: 0, spares: [0, 0, 0], carriers: [0, 0]),
-        row(1.0, r: [4, 0, 0], s: [0, 0, 0], h: [0, 0, 0], rocks: 3, mirrors: 0, spares: [0, 0, 0], carriers: [0, 0]),
-        row(1.0, r: [5, 0, 0], s: [0, 0, 0], h: [0, 0, 0], rocks: 3, mirrors: 0, spares: [0, 0, 0], carriers: [0, 0]),
-        row(1.0, r: [6, 0, 0], s: [0, 0, 0], h: [0, 0, 0], rocks: 3, mirrors: 0, spares: [0, 0, 0], carriers: [0, 0]),
-        row(1.5, r: [7, 0, 0], s: [0, 0, 0], h: [0, 0, 0], rocks: 3, mirrors: 1, spares: [0, 0, 0], carriers: [0, 0]),
-        row(1.5, r: [8, 0, 0], s: [0, 0, 0], h: [0, 0, 0], rocks: 4, mirrors: 1, spares: [0, 0, 0], carriers: [0, 0]),
-        row(1.5, r: [9, 0, 0], s: [0, 0, 0], h: [0, 0, 0], rocks: 4, mirrors: 1, spares: [0, 0, 0], carriers: [0, 0]),
-        row(1.5, r: [10, 0, 0], s: [0, 0, 0], h: [0, 0, 0], rocks: 4, mirrors: 1, spares: [0, 0, 0], carriers: [0, 0]),
-        row(2.0, r: [4, 0, 0], s: [0, 0, 0], h: [0, 0, 0], rocks: 6, mirrors: 3, spares: [5, 0, 0], carriers: [0, 0], bosses: [BossSpec(kind: .runner, tier: 0, shield: 14)]), // 10
-        row(1.5, r: [5, 0, 0], s: [1, 0, 0], h: [0, 0, 0], rocks: 5, mirrors: 2, spares: [0, 0, 0], carriers: [0, 0]), // 11
-        row(1.5, r: [5, 0, 0], s: [1, 0, 0], h: [0, 0, 0], rocks: 5, mirrors: 2, spares: [0, 0, 0], carriers: [1, 0]),
-        row(1.5, r: [5, 0, 0], s: [2, 0, 0], h: [0, 0, 0], rocks: 5, mirrors: 2, spares: [0, 0, 0], carriers: [1, 0]),
-        row(1.5, r: [6, 0, 0], s: [2, 0, 0], h: [0, 0, 0], rocks: 5, mirrors: 2, spares: [0, 0, 0], carriers: [1, 0]),
-        row(1.5, r: [6, 0, 0], s: [3, 0, 0], h: [0, 0, 0], rocks: 6, mirrors: 2, spares: [1, 0, 0], carriers: [1, 0]),
-        row(2.0, r: [6, 0, 0], s: [3, 0, 0], h: [0, 0, 0], rocks: 6, mirrors: 3, spares: [1, 0, 0], carriers: [1, 0]),
-        row(2.0, r: [7, 0, 0], s: [4, 0, 0], h: [0, 0, 0], rocks: 6, mirrors: 3, spares: [1, 0, 0], carriers: [1, 0]),
-        row(2.0, r: [7, 0, 0], s: [4, 0, 0], h: [0, 0, 0], rocks: 6, mirrors: 3, spares: [1, 0, 0], carriers: [1, 0]),
-        row(2.0, r: [7, 0, 0], s: [5, 0, 0], h: [0, 0, 0], rocks: 7, mirrors: 3, spares: [1, 0, 0], carriers: [1, 0]),
-        row(2.0, r: [5, 0, 0], s: [0, 0, 0], h: [0, 0, 0], rocks: 6, mirrors: 4, spares: [0, 3, 0], carriers: [0, 0], bosses: [BossSpec(kind: .shooter, tier: 0, shield: 16)]), // 20
+        row(1.0, r: [0, 0, 0], s: [2, 0, 0], h: [0, 0, 0], rocks: 3, mirrors: 0, spares: [0, 0, 0], carriers: [0, 0]), // 1
+        row(1.0, r: [0, 0, 0], s: [3, 0, 0], h: [0, 0, 0], rocks: 3, mirrors: 0, spares: [0, 0, 0], carriers: [0, 0]),
+        row(1.0, r: [0, 0, 0], s: [4, 0, 0], h: [0, 0, 0], rocks: 3, mirrors: 0, spares: [0, 0, 0], carriers: [0, 0]),
+        row(1.0, r: [0, 0, 0], s: [5, 0, 0], h: [0, 0, 0], rocks: 3, mirrors: 0, spares: [0, 0, 0], carriers: [0, 0]),
+        row(1.0, r: [0, 0, 0], s: [6, 0, 0], h: [0, 0, 0], rocks: 3, mirrors: 0, spares: [0, 0, 0], carriers: [0, 0]),
+        row(1.5, r: [0, 0, 0], s: [7, 0, 0], h: [0, 0, 0], rocks: 3, mirrors: 1, spares: [0, 0, 0], carriers: [0, 0]),
+        row(1.5, r: [0, 0, 0], s: [8, 0, 0], h: [0, 0, 0], rocks: 4, mirrors: 1, spares: [0, 0, 0], carriers: [0, 0]),
+        row(1.5, r: [0, 0, 0], s: [9, 0, 0], h: [0, 0, 0], rocks: 4, mirrors: 1, spares: [0, 0, 0], carriers: [0, 0]),
+        row(1.5, r: [0, 0, 0], s: [10, 0, 0], h: [0, 0, 0], rocks: 4, mirrors: 1, spares: [0, 0, 0], carriers: [0, 0]),
+        row(2.0, r: [0, 0, 0], s: [4, 0, 0], h: [0, 0, 0], rocks: 6, mirrors: 3, spares: [5, 0, 0], carriers: [0, 0], bosses: [BossSpec(kind: .shooter, tier: 0, shield: 14)]), // 10
+        row(1.5, r: [1, 0, 0], s: [5, 0, 0], h: [0, 0, 0], rocks: 5, mirrors: 2, spares: [0, 0, 0], carriers: [0, 0]), // 11
+        row(1.5, r: [1, 0, 0], s: [5, 0, 0], h: [0, 0, 0], rocks: 5, mirrors: 2, spares: [0, 0, 0], carriers: [1, 0]),
+        row(1.5, r: [2, 0, 0], s: [5, 0, 0], h: [0, 0, 0], rocks: 5, mirrors: 2, spares: [0, 0, 0], carriers: [1, 0]),
+        row(1.5, r: [2, 0, 0], s: [6, 0, 0], h: [0, 0, 0], rocks: 5, mirrors: 2, spares: [0, 0, 0], carriers: [1, 0]),
+        row(1.5, r: [3, 0, 0], s: [6, 0, 0], h: [0, 0, 0], rocks: 6, mirrors: 2, spares: [1, 0, 0], carriers: [1, 0]),
+        row(2.0, r: [3, 0, 0], s: [6, 0, 0], h: [0, 0, 0], rocks: 6, mirrors: 3, spares: [1, 0, 0], carriers: [1, 0]),
+        row(2.0, r: [4, 0, 0], s: [7, 0, 0], h: [0, 0, 0], rocks: 6, mirrors: 3, spares: [1, 0, 0], carriers: [1, 0]),
+        row(2.0, r: [4, 0, 0], s: [7, 0, 0], h: [0, 0, 0], rocks: 6, mirrors: 3, spares: [1, 0, 0], carriers: [1, 0]),
+        row(2.0, r: [5, 0, 0], s: [7, 0, 0], h: [0, 0, 0], rocks: 7, mirrors: 3, spares: [1, 0, 0], carriers: [1, 0]),
+        row(2.0, r: [0, 0, 0], s: [5, 0, 0], h: [0, 0, 0], rocks: 6, mirrors: 4, spares: [0, 3, 0], carriers: [0, 0], bosses: [BossSpec(kind: .runner, tier: 0, shield: 16)]), // 20
         row(2.0, r: [5, 0, 0], s: [3, 0, 0], h: [1, 0, 0], rocks: 7, mirrors: 4, spares: [1, 0, 0], carriers: [1, 0]), // 21
         row(2.0, r: [5, 0, 0], s: [3, 0, 0], h: [1, 0, 0], rocks: 7, mirrors: 4, spares: [1, 0, 0], carriers: [1, 0]),
         row(2.0, r: [5, 0, 0], s: [3, 0, 0], h: [1, 0, 0], rocks: 8, mirrors: 4, spares: [1, 0, 0], carriers: [1, 0]),
