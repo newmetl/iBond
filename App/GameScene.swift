@@ -66,11 +66,18 @@ final class GameScene: SKScene {
     private let fireButtonRadius: CGFloat = 44
     private let fireZoneRadius: CGFloat = 100
 
-    /// Both stick schemes reserve an opaque strip at the bottom of the screen
-    /// for the controls; the visible play area is everything above it. The
-    /// pure tap scheme has no on-screen controls and keeps the full screen.
+    /// Both stick schemes reserve an opaque control area: a strip along the
+    /// BOTTOM in portrait, a column along the LEFT in landscape (thumbs rest
+    /// there naturally). The visible play area is the rest of the screen.
+    /// The pure tap scheme has no on-screen controls and keeps everything.
+    private var isLandscapeLayout: Bool { size.width > size.height }
+    /// Bottom strip height — 0 in landscape or the tap scheme.
     private var controlStripHeight: CGFloat {
-        controlScheme == .tap ? 0 : min(190, size.height * 0.24)
+        controlScheme == .tap || isLandscapeLayout ? 0 : min(190, size.height * 0.24)
+    }
+    /// Left column width — 0 in portrait or the tap scheme.
+    private var controlColumnWidth: CGFloat {
+        controlScheme == .tap || !isLandscapeLayout ? 0 : min(190, size.width * 0.24)
     }
     private var controlPanel: SKSpriteNode?
     private var controlPanelSeparator: SKSpriteNode?
@@ -184,20 +191,37 @@ final class GameScene: SKScene {
         layoutControlPanel()
     }
 
-    /// Sizes and positions the control strip's backdrop + separator line.
+    /// Sizes and positions the control area's backdrop + separator line:
+    /// a bottom strip in portrait, a left column in landscape.
     private func layoutControlPanel() {
-        controlPanel?.size = CGSize(width: size.width, height: controlStripHeight)
-        controlPanel?.position = CGPoint(x: 0, y: -size.height / 2 + controlStripHeight / 2)
-        controlPanelSeparator?.size = CGSize(width: size.width, height: 1.5)
-        controlPanelSeparator?.position = CGPoint(x: 0, y: -size.height / 2 + controlStripHeight)
+        if isLandscapeLayout {
+            controlPanel?.size = CGSize(width: controlColumnWidth, height: size.height)
+            controlPanel?.position = CGPoint(x: -size.width / 2 + controlColumnWidth / 2, y: 0)
+            controlPanelSeparator?.size = CGSize(width: 1.5, height: size.height)
+            controlPanelSeparator?.position = CGPoint(x: -size.width / 2 + controlColumnWidth, y: 0)
+        } else {
+            controlPanel?.size = CGSize(width: size.width, height: controlStripHeight)
+            controlPanel?.position = CGPoint(x: 0, y: -size.height / 2 + controlStripHeight / 2)
+            controlPanelSeparator?.size = CGSize(width: size.width, height: 1.5)
+            controlPanelSeparator?.position = CGPoint(x: 0, y: -size.height / 2 + controlStripHeight)
+        }
         layoutBatteryButtons()
     }
 
     private let batteryButtonSize = CGSize(width: 92, height: 44)
 
-    /// The type buttons stack red-top → white-bottom on the strip's right; the
-    /// classic scheme shifts them left to clear the fire button.
+    /// The type buttons stack red-top → white-bottom: on the strip's right in
+    /// portrait (the classic scheme shifts them left to clear the fire
+    /// button), at the top of the left column in landscape.
     private func layoutBatteryButtons() {
+        if isLandscapeLayout {
+            let x = -size.width / 2 + controlColumnWidth * 0.5
+            for type in BatteryType.allCases {
+                let y = size.height / 2 - 44 - CGFloat(type.rawValue) * 56
+                batteryButtons[type]?.position = CGPoint(x: x, y: y)
+            }
+            return
+        }
         let x = controlScheme == .joystick
             ? size.width / 2 - 70 - fireButtonRadius - batteryButtonSize.width / 2 - 14
             : size.width / 2 - 70
@@ -223,18 +247,27 @@ final class GameScene: SKScene {
         return nil
     }
 
-    /// Joystick base center in camera coordinates: left half of the control
-    /// strip, pulled in from the screen edge (80pt from the corner felt too
-    /// close) and vertically centered in the strip.
+    /// Joystick base center in camera coordinates. Portrait: left half of the
+    /// bottom strip, pulled in from the screen edge (80pt from the corner
+    /// felt too close). Landscape: bottom of the left column.
     private var joystickCenter: CGPoint {
-        CGPoint(x: -size.width / 2 + 130,
-                y: -size.height / 2 + controlStripHeight * 0.5)
+        if isLandscapeLayout {
+            return CGPoint(x: -size.width / 2 + controlColumnWidth * 0.5,
+                           y: -size.height / 2 + 110)
+        }
+        return CGPoint(x: -size.width / 2 + 130,
+                       y: -size.height / 2 + controlStripHeight * 0.5)
     }
 
-    /// Fire button center in camera coordinates: right side of the strip.
+    /// Fire button center (classic scheme). Portrait: right side of the
+    /// strip. Landscape: floating in the lower-right corner of the play area
+    /// — right thumb fires while the left thumb steers in the column.
     private var fireButtonCenter: CGPoint {
-        CGPoint(x: size.width / 2 - 70,
-                y: -size.height / 2 + controlStripHeight * 0.5)
+        if isLandscapeLayout {
+            return CGPoint(x: size.width / 2 - 70, y: -size.height / 2 + 88)
+        }
+        return CGPoint(x: size.width / 2 - 70,
+                       y: -size.height / 2 + controlStripHeight * 0.5)
     }
 
     override func update(_ currentTime: TimeInterval) {
@@ -1287,7 +1320,9 @@ final class GameScene: SKScene {
 
     private func isInControlStrip(_ touch: UITouch) -> Bool {
         guard let cameraNode else { return false }
-        return touch.location(in: cameraNode).y < -size.height / 2 + controlStripHeight
+        let location = touch.location(in: cameraNode)
+        return location.y < -size.height / 2 + controlStripHeight
+            || location.x < -size.width / 2 + controlColumnWidth
     }
 
     private func isInFireZone(_ touch: UITouch) -> Bool {
@@ -1514,26 +1549,31 @@ final class GameScene: SKScene {
               let player = world.playerID.flatMap({ world.body(withID: $0) }) else { return }
         let halfW = size.width / 2
         let halfH = size.height / 2
-        // Center the player in the VISIBLE play area — the part of the screen
-        // above the control strip — and let the bottom clamp stop at the strip's
-        // top edge so no map hides behind the panel.
+        // Center the player in the VISIBLE play area — the screen minus the
+        // control area (bottom strip in portrait, left column in landscape) —
+        // and clamp so no map hides behind the panel.
         let strip = controlStripHeight
-        var cam = CGPoint(x: CGFloat(player.position.x),
+        let column = controlColumnWidth
+        var cam = CGPoint(x: CGFloat(player.position.x) - column / 2,
                           y: CGFloat(player.position.y) - strip / 2)
-        cam.x = min(max(cam.x, halfW), CGFloat(world.size.x) - halfW)
+        cam.x = min(max(cam.x, halfW - column), CGFloat(world.size.x) - halfW)
         cam.y = min(max(cam.y, halfH - strip), CGFloat(world.size.y) - halfH)
         cameraNode.position = cam
     }
 
 
-    /// "On screen" means inside the VISIBLE play area: the control strip
-    /// covers the bottom of the screen, so bodies behind the panel don't
-    /// count (they can't be seen, must not activate or aim).
+    /// "On screen" means inside the VISIBLE play area: the control panel
+    /// (bottom strip in portrait, left column in landscape) covers part of
+    /// the screen, so bodies behind it don't count (they can't be seen,
+    /// must not activate or aim).
     private func isOnScreen(position: Vector2, radius: Double) -> Bool {
         guard let cameraNode else { return false }
-        return abs(position.x - cameraNode.position.x) <= size.width / 2 + radius
-            && position.y - cameraNode.position.y <= size.height / 2 + radius
-            && position.y - cameraNode.position.y >= -size.height / 2 + controlStripHeight - radius
+        let dx = position.x - cameraNode.position.x
+        let dy = position.y - cameraNode.position.y
+        return dx <= size.width / 2 + radius
+            && dx >= -size.width / 2 + controlColumnWidth - radius
+            && dy <= size.height / 2 + radius
+            && dy >= -size.height / 2 + controlStripHeight - radius
     }
 
     // MARK: - Enemies
