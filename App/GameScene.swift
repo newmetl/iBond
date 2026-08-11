@@ -1369,11 +1369,13 @@ final class GameScene: SKScene {
         laserNode?.strokeColor = batteryColor(type)
     }
 
-    /// The selected pool is empty: fall over to the first type (red → orange
-    /// → white) that still has charge, if any.
+    /// The selected pool is empty: fall over to the STRONGEST type (white →
+    /// orange → red) that still has charge, if any — the stronger laser is
+    /// always preferred.
     private func autoSwitchBattery() {
         guard currentReserve <= 0,
-              let next = BatteryType.allCases.first(where: { (batteryReserves[$0] ?? 0) > 0 })
+              let next = BatteryType.allCases.reversed()
+                  .first(where: { (batteryReserves[$0] ?? 0) > 0 })
         else { return }
         selectBattery(next)
     }
@@ -1685,10 +1687,13 @@ final class GameScene: SKScene {
             let distance = player.position.distance(to: Vector2(pickup.position.x, pickup.position.y))
             guard distance <= player.radius + 14 else { return false }
             // The pickup ADDS a full charge to its type's pool — collecting a
-            // second Red on top of a full Red gives 6s. If the selected pool
-            // is empty, switch straight to the fresh one.
+            // second Red on top of a full Red gives 6s. A stronger laser is
+            // always preferred: picking one up switches to it immediately
+            // (as does any pickup while the selected pool is empty).
             batteryReserves[pickup.type, default: 0] += pickup.type.capacity
-            if currentReserve <= 0 { selectBattery(pickup.type) }
+            if pickup.type.power > batteryType.power || currentReserve <= 0 {
+                selectBattery(pickup.type)
+            }
             pickup.node.run(.sequence([
                 .group([
                     .scale(to: 1.8, duration: 0.2),
