@@ -176,9 +176,10 @@ final class GameScene: SKScene {
     /// lie. Scrolling one into view arms it for good; armed mines home in
     /// magnetically, accelerate every frame, and fly straight THROUGH rocks,
     /// mirrors, and other enemies (phantom bodies — no cover works). Laser
-    /// only — and at a 2pt radius (a seventh of a regular enemy) hitting one
-    /// takes a near-perfect shot.
-    private let mineRadius: Double = 2
+    /// only — and at a 1.2pt radius hitting one takes a perfect shot. No
+    /// glow: mines betray themselves through sonar-like red rings rippling
+    /// out of them (slow while dormant, rapid once armed).
+    private let mineRadius: Double = 1.2
     private let mineStartSpeed: Double = 60
     private let mineAcceleration: Double = 90
     private let mineMaxSpeed: Double = 500
@@ -1159,19 +1160,50 @@ final class GameScene: SKScene {
         return spark
     }
 
-    /// A dormant mine: small dark body with a warning-red rim, pulsing very
-    /// slowly. Arming swaps the pulse for a fast angry throb (see armMine).
+    /// A dormant mine: a tiny dark-red speck, pulsing very slowly. It gives
+    /// its position away only through sonar rings — expanding red ripples
+    /// like waves on water — emitted where it currently is. Arming swaps the
+    /// pulse for a fast throb and a rapid ring cadence (see armMine).
     private func makeMineNode(radius: Double) -> SKShapeNode {
         let node = SKShapeNode(circleOfRadius: CGFloat(radius))
-        node.fillColor = SKColor(red: 0.5, green: 0.1, blue: 0.12, alpha: 1)
+        node.fillColor = SKColor(red: 0.7, green: 0.12, blue: 0.14, alpha: 1)
         node.strokeColor = SKColor(red: 1, green: 0.35, blue: 0.3, alpha: 0.9)
-        node.lineWidth = 1.5
+        node.lineWidth = 1
         node.zPosition = 0
         node.run(.repeatForever(.sequence([
             .scale(to: 1.25, duration: 1.4),
             .scale(to: 0.9, duration: 1.4),
         ])), withKey: "minePulse")
+        runMineSonar(on: node, interval: 1.8, ringDuration: 1.4)
         return node
+    }
+
+    /// Emits an expanding, fading red ring from the node's CURRENT position
+    /// every `interval` seconds — the ripples stay where they were emitted
+    /// while the mine flies on, like a wake.
+    private func runMineSonar(on node: SKShapeNode, interval: TimeInterval,
+                              ringDuration: TimeInterval) {
+        node.removeAction(forKey: "mineSonar")
+        node.run(.repeatForever(.sequence([
+            .run { [weak self, weak node] in
+                guard let self, let node, node.parent != nil else { return }
+                let ring = SKShapeNode(circleOfRadius: 3)
+                ring.strokeColor = SKColor(red: 1, green: 0.3, blue: 0.28, alpha: 0.7)
+                ring.lineWidth = 1
+                ring.fillColor = .clear
+                ring.position = node.position
+                ring.zPosition = -0.5
+                self.addChild(ring)
+                ring.run(.sequence([
+                    .group([
+                        .scale(to: 9, duration: ringDuration),
+                        .fadeOut(withDuration: ringDuration),
+                    ]),
+                    .removeFromParent(),
+                ]))
+            },
+            .wait(forDuration: interval),
+        ])), withKey: "mineSonar")
     }
 
     /// A big immovable rock: an irregular polygon roughly tracing the engine's
@@ -1839,17 +1871,18 @@ final class GameScene: SKScene {
         }
     }
 
-    /// One-way arming: the slow idle pulse becomes a fast angry throb.
+    /// One-way arming: the slow idle pulse becomes a fast angry throb and
+    /// the sonar rings come rapid-fire.
     private func armMine(_ id: BodyID) {
         guard !activeMineIDs.contains(id) else { return }
         activeMineIDs.insert(id)
         guard let node = npcNodes[id] else { return }
         node.removeAction(forKey: "minePulse")
-        node.glowWidth = 3
         node.run(.repeatForever(.sequence([
             .scale(to: 1.35, duration: 0.18),
             .scale(to: 0.85, duration: 0.18),
         ])), withKey: "minePulse")
+        runMineSonar(on: node, interval: 0.45, ringDuration: 0.7)
     }
 
     /// Runners, hunters, mines, and every boss (huge shooters included) kill
