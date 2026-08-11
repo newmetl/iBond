@@ -112,6 +112,31 @@ final class WorldBodyTests: XCTestCase {
         XCTAssertGreaterThan(world.body(withID: id)!.position.x, 100)
     }
 
+    func testMineFliesStraightThroughARock() {
+        let world = World(size: Vector2(400, 400))
+        world.addRock(at: Vector2(200, 100), radius: 40)
+        let id = world.addMine(at: Vector2(120, 100), radius: 5)
+        for _ in 0..<120 {
+            world.setVelocity(Vector2(200, 0), forBodyID: id)
+            world.update(dt: 1.0 / 120.0)
+        }
+        // One second at 200pt/s crosses the rock's span; a colliding body
+        // would have been stopped at its rim (~x 155).
+        XCTAssertGreaterThan(world.body(withID: id)!.position.x, 280)
+        XCTAssertEqual(world.body(withID: id)!.position.y, 100, accuracy: 1)
+    }
+
+    func testMineFliesStraightThroughAMirror() {
+        let world = World(size: Vector2(400, 400))
+        world.addMirror(from: Vector2(200, 40), to: Vector2(200, 160))
+        let id = world.addMine(at: Vector2(150, 100), radius: 5)
+        for _ in 0..<120 {
+            world.setVelocity(Vector2(200, 0), forBodyID: id)
+            world.update(dt: 1.0 / 120.0)
+        }
+        XCTAssertGreaterThan(world.body(withID: id)!.position.x, 300)
+    }
+
     func testSetRadiusChangesBodyRadius() {
         let world = World(size: Vector2(400, 400))
         let id = world.addRunner(at: Vector2(120, 80), radius: 42)

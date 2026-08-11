@@ -162,12 +162,14 @@ final class GameScene: SKScene {
 
     /// Mines (level 51 on): tiny dormant bodies that pulse slowly where they
     /// lie. Scrolling one into view arms it for good; armed mines home in
-    /// magnetically and accelerate every frame. Laser only — and at nearly a
-    /// third of a regular enemy's radius they're hard to hit.
-    private let mineRadius: Double = 5
-    private let mineStartSpeed: Double = 40
-    private let mineAcceleration: Double = 55
-    private let mineMaxSpeed: Double = 380
+    /// magnetically, accelerate every frame, and fly straight THROUGH rocks,
+    /// mirrors, and other enemies (phantom bodies — no cover works). Laser
+    /// only — and at a quarter of a regular enemy's radius they're very hard
+    /// to hit.
+    private let mineRadius: Double = 3.5
+    private let mineStartSpeed: Double = 60
+    private let mineAcceleration: Double = 90
+    private let mineMaxSpeed: Double = 500
     private var activeMineIDs: Set<BodyID> = []
     private var mineSpeeds: [BodyID: Double] = [:]
     private var batteryHUDNode: SKNode?
