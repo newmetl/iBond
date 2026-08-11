@@ -580,7 +580,9 @@ final class GameScene: SKScene {
         let coverSpots: [(position: Vector2, radius: Double)] = rocks.isEmpty
             ? world.mirrors.map { (($0.start + $0.end) * 0.5, 12.0) }
             : rocks.map { ($0.position, $0.radius) }
-        var shooterCarriersLeft = config.shooterRedCarriers
+        // With the infinite red in hand, red pickups are pointless clutter:
+        // no red carriers, no red map spares (see the spares loop below).
+        var shooterCarriersLeft = hasInfiniteRed ? 0 : config.shooterRedCarriers
         for (tier, count) in config.shooters.enumerated() {
             var placed = 0
             var attempts = 0
@@ -750,7 +752,7 @@ final class GameScene: SKScene {
         updatePlayerShieldRings() // carried-over shields show from frame one
 
         // Typed map spares, never right next to the spawn.
-        for (type, count) in [(BatteryType.red, config.redSpares),
+        for (type, count) in [(BatteryType.red, hasInfiniteRed ? 0 : config.redSpares),
                               (.orange, config.orangeSpares),
                               (.white, config.whiteSpares)] {
             var placed = 0
