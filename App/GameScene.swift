@@ -594,23 +594,27 @@ final class GameScene: SKScene {
 
         // Bosses: huge versions of regular kinds; behavior follows the kind.
         for spec in config.bosses {
+            // Huge runners are slimmer than the other bosses so they can
+            // squeeze through rock/mirror gaps instead of wedging.
+            let bossRadius = spec.kind == .runner ? BossStats.runnerRadius
+                                                  : BossStats.radius
             var placed = false
             var bossAttempts = 0
             while !placed, bossAttempts < 300 {
                 bossAttempts += 1
                 let position: Vector2
                 if config.fortress {
-                    guard let inside = fortressInteriorPosition(radius: BossStats.radius) else { continue }
+                    guard let inside = fortressInteriorPosition(radius: bossRadius) else { continue }
                     position = inside
                 } else {
-                    guard let free = world.randomFreePosition(radius: BossStats.radius, using: &rng),
+                    guard let free = world.randomFreePosition(radius: bossRadius, using: &rng),
                           free.distance(to: playerStart) > config.runnerMinPlayerDistance else { continue }
                     position = free
                 }
                 let id: BodyID
                 switch spec.kind {
                 case .runner:
-                    id = world.addRunner(at: position, radius: BossStats.radius,
+                    id = world.addRunner(at: position, radius: bossRadius,
                                          mass: BossStats.mass)
                     world.runnerSpeedOverrides[id] = BossStats.runnerSpeed(tier: spec.tier)
                 case .shooter:

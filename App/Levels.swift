@@ -44,14 +44,16 @@ struct BossSpec {
 }
 
 /// Shared boss body stats plus per-kind derivations from the tier tables:
-/// huge runners chase at ~55% of their tier's speed, huge shooters aim
-/// slightly faster than their tier (a slow aim made them trivial to kill),
-/// huge hunters approach at ~50%.
+/// huge runners chase at 80% of their tier's speed (55% was too tame) and
+/// run slimmer than the other bosses so they don't wedge between rocks and
+/// mirrors, huge shooters aim slightly faster than their tier (a slow aim
+/// made them trivial to kill), huge hunters approach at ~50%.
 enum BossStats {
     static let radius = 42.0
+    static let runnerRadius = 30.0
     static let mass = 9.0
     static let patrolSpeed = 35.0
-    static func runnerSpeed(tier: Int) -> Double { EnemyTiers.runnerSpeed[tier] * 0.55 }
+    static func runnerSpeed(tier: Int) -> Double { EnemyTiers.runnerSpeed[tier] * 0.8 }
     /// Huge shooters keep their own per-tier aim ramp (the regular table went
     /// flat at 1.5 — see EnemyTiers.shooterAim); a slow-aiming boss is trivial.
     static func shooterAim(tier: Int) -> Double { [1.5, 1.1, 0.8][tier] * 0.93 }
