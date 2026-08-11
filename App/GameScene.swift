@@ -379,18 +379,24 @@ final class GameScene: SKScene {
             + config.hunters.dropFirst().reduce(0, +)
         var shieldCarriersLeft = shieldedRegulars > 0 ? 2 : 0
 
-        // Shooters lurk right next to rocks (their cover), never near the
-        // player's spawn. The first `shooterRedCarriers` carry Red batteries.
+        // Shooters lurk right next to cover — rocks normally; on the
+        // all-mirror levels (no rocks at all) they tuck in beside mirror
+        // midpoints instead (mirrors block line of sight, so the hidden
+        // check below still works). Never near the player's spawn. The
+        // first `shooterRedCarriers` carry Red batteries.
         let rocks = world.rockIDs.compactMap { world.body(withID: $0) }
+        let coverSpots: [(position: Vector2, radius: Double)] = rocks.isEmpty
+            ? world.mirrors.map { (($0.start + $0.end) * 0.5, 12.0) }
+            : rocks.map { ($0.position, $0.radius) }
         var shooterCarriersLeft = config.shooterRedCarriers
         for (tier, count) in config.shooters.enumerated() {
             var placed = 0
             var attempts = 0
-            while placed < count, attempts < 300, let rock = rocks.randomElement(using: &rng) {
+            while placed < count, attempts < 300, let cover = coverSpots.randomElement(using: &rng) {
                 attempts += 1
                 let angle = Double.random(in: 0..<(2 * .pi), using: &rng)
-                let dist = rock.radius + npcRadius + Double.random(in: 4...26, using: &rng)
-                let candidate = rock.position + Vector2(cos(angle), sin(angle)) * dist
+                let dist = cover.radius + npcRadius + Double.random(in: 4...26, using: &rng)
+                let candidate = cover.position + Vector2(cos(angle), sin(angle)) * dist
                 guard candidate.x > 20, candidate.x < mapSize.x - 20,
                       candidate.y > 20, candidate.y < mapSize.y - 20,
                       candidate.distance(to: playerStart) > config.shooterMinPlayerDistance,
