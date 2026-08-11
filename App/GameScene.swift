@@ -393,14 +393,21 @@ final class GameScene: SKScene {
         batteryHUDNode = nil
         enemyDotsNode = nil
         lastEnemyDotIDs = []
-        if carryOver {
-            batteryReserves[.red] = max(batteryReserves[.red] ?? 0,
-                                        BatteryType.red.capacity)
-            if currentReserve <= 0 { batteryType = .red }
-        } else {
+        // Guaranteed minimum loadout at level start: one full Red always;
+        // from level 55 on also one full Orange (the tier-II/III shield mass
+        // there makes a bare red start a slog). Carry-over keeps anything
+        // above the minimums.
+        if !carryOver {
             batteryType = .red
-            batteryReserves = [.red: BatteryType.red.capacity]
+            batteryReserves = [:]
         }
+        batteryReserves[.red] = max(batteryReserves[.red] ?? 0,
+                                    BatteryType.red.capacity)
+        if level >= 55 {
+            batteryReserves[.orange] = max(batteryReserves[.orange] ?? 0,
+                                           BatteryType.orange.capacity)
+        }
+        if currentReserve <= 0 { batteryType = .red }
         batteryButtons = [:]
         batteryButtonFills = [:]
         batteryButtonLabels = [:]
