@@ -871,6 +871,14 @@ final class GameScene: SKScene {
                 button.addChild(fill)
                 batteryButtonFills[type] = fill
 
+                // Dark backing chip so the seconds stay readable on any fill
+                // color (white text on the white battery was invisible).
+                let labelBacking = SKShapeNode(rectOf: CGSize(width: 56, height: 20),
+                                               cornerRadius: 6)
+                labelBacking.fillColor = SKColor(white: 0, alpha: 0.45)
+                labelBacking.strokeColor = .clear
+                button.addChild(labelBacking)
+
                 let label = SKLabelNode(text: "")
                 label.fontName = "HelveticaNeue-Bold"
                 label.fontSize = 15
