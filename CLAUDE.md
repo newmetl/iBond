@@ -7,7 +7,7 @@ pure-Swift custom physics/raycast engine. Rebuilt from scratch in 2026 from a
 ## Repo layout
 
 - `Packages/GameEngine/` — pure Swift engine package, ZERO UIKit/SpriteKit
-  imports, fully unit-tested (82 tests). Vector2 (SIMD2<Double> typealias),
+  imports, fully unit-tested (84 tests). Vector2 (SIMD2<Double> typealias),
   CircleBody (player/npc/rock/shooter/runner kinds), World (fixed-timestep
   update, circle & segment collisions, laser raycast with mirror reflection,
   line-of-sight), Rect, Laser.swift (LaserHit/Mirror/LaserPath + castLaserPath).
@@ -30,7 +30,7 @@ pure-Swift custom physics/raycast engine. Rebuilt from scratch in 2026 from a
 
 ```bash
 xcodegen                                     # regenerate iBond.xcodeproj (after project.yml changes / fresh clone)
-swift test --package-path Packages/GameEngine  # engine tests (no simulator needed) — expect 82 passing
+swift test --package-path Packages/GameEngine  # engine tests (no simulator needed) — expect 84 passing
 xcodebuild -project iBond.xcodeproj -scheme iBond \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
   -derivedDataPath DerivedData build         # simulator build
