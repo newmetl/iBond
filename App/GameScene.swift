@@ -145,6 +145,12 @@ final class GameScene: SKScene {
     private var playerShields = 0
     private var shieldPickups: [(position: CGPoint, node: SKShapeNode)] = []
     private var shieldCarriers: Set<BodyID> = []
+
+    /// Fortress levels (every level ending in 5): a rock ring with one
+    /// entrance holds every enemy; crossing it springs the trap.
+    private var fortressCenter: Vector2?
+    private var fortressRadius: Double = 0
+    private var fortressBreached = false
     private var batteryHUDNode: SKNode?
     private var batteryFillBar: SKSpriteNode?
     private var enemyDotsNode: SKNode?
@@ -241,6 +247,7 @@ final class GameScene: SKScene {
         syncNodes()
         updateCamera()
         registerVisibleEnemies()
+        checkFortressBreach()
         processLaser()
         processShooters(currentTime)
         processHunters(currentTime)
@@ -278,6 +285,28 @@ final class GameScene: SKScene {
             seenEnemyIDs.insert(body.id)
             if body.kind == .runner, !world.activeRunnerIDs.contains(body.id) {
                 world.activateRunner(body.id)
+            }
+        }
+    }
+
+    /// Fortress levels: stepping through the entrance springs the trap —
+    /// every enemy notices the player at once. Runners give chase, hunters
+    /// charge (processHunters treats them as permanently noticed), shooters
+    /// wake for damage purposes. One-way, like runner activation.
+    private func checkFortressBreach() {
+        guard gameStarted, !fortressBreached, let world,
+              let center = fortressCenter,
+              let player = world.playerID.flatMap({ world.body(withID: $0) }),
+              player.position.distance(to: center) < fortressRadius - 45 else { return }
+        fortressBreached = true
+        let now = lastUpdateTime ?? 0
+        for body in world.bodies where body.kind.isHostile {
+            seenEnemyIDs.insert(body.id)
+            if body.kind == .runner, !world.activeRunnerIDs.contains(body.id) {
+                world.activateRunner(body.id)
+            }
+            if body.kind == .hunter {
+                hunterModes[body.id] = .approach(until: now + hunterApproachDuration)
             }
         }
     }
@@ -335,6 +364,9 @@ final class GameScene: SKScene {
         playerShields = 0
         shieldPickups = []
         shieldCarriers = []
+        fortressCenter = nil
+        fortressRadius = 0
+        fortressBreached = false
         gameStarted = true
         SoundManager.shared.startMusic()
         ensureWorld() // builds now if the scene is laid out; else on next update
@@ -346,11 +378,64 @@ final class GameScene: SKScene {
         guard gameStarted, world == nil, size.width > 0, size.height > 0 else { return }
         let mapSize = Vector2(size.width * config.mapScale, size.height * config.mapScale)
         let world = World(size: mapSize)
+        var rng = SystemRandomNumberGenerator()
 
-        let playerStart = mapSize * 0.5
+        // Fortress levels: a rock ring at the map center with one entrance
+        // opening along the map's LONG axis; the player starts outside,
+        // in front of the entrance, and every enemy waits inside.
+        let center = mapSize * 0.5
+        let ringRadius = min(mapSize.x, mapSize.y) * 0.30
+        let entranceDir: Vector2 = mapSize.y >= mapSize.x ? Vector2(0, -1) : Vector2(-1, 0)
+        let wallRockRadius = 40.0
+        let playerStart: Vector2
+        if config.fortress {
+            fortressCenter = center
+            fortressRadius = ringRadius
+            playerStart = center + entranceDir * (ringRadius + 280)
+        } else {
+            playerStart = center
+        }
         world.addPlayer(at: playerStart, radius: playerRadius)
         world.runnerSpeed = EnemyTiers.runnerSpeed[0]
-        var rng = SystemRandomNumberGenerator()
+
+        if config.fortress {
+            // Wall rocks overlap slightly (spacing 1.5×radius) so the ring
+            // is beam- and body-tight everywhere except the entrance gap.
+            let entranceAngle = atan2(entranceDir.y, entranceDir.x)
+            let gapHalfAngle = (60.0 + wallRockRadius) / ringRadius
+            let count = Int(2 * Double.pi * ringRadius / (wallRockRadius * 1.5))
+            for i in 0..<count {
+                let angle = Double(i) / Double(count) * 2 * .pi
+                var diff = angle - entranceAngle
+                while diff > .pi { diff -= 2 * .pi }
+                while diff < -.pi { diff += 2 * .pi }
+                guard abs(diff) >= gapHalfAngle else { continue }
+                world.addRock(at: center + Vector2(cos(angle), sin(angle)) * ringRadius,
+                              radius: wallRockRadius)
+            }
+        }
+        /// A free spot inside the fortress ring (engine-checked against
+        /// bodies; run before the wall's interior fills up).
+        func fortressInteriorPosition(radius: Double) -> Vector2? {
+            let reach = ringRadius - wallRockRadius - radius - 20
+            for _ in 0..<80 {
+                let angle = Double.random(in: 0..<(2 * .pi), using: &rng)
+                let dist = Double.random(in: 0...max(1, reach), using: &rng)
+                let candidate = center + Vector2(cos(angle), sin(angle)) * dist
+                if world.bodies.allSatisfy({
+                    $0.position.distance(to: candidate) >= $0.radius + radius + 6
+                }) {
+                    return candidate
+                }
+            }
+            return nil
+        }
+        // Keep the entrance corridor clear of random obstacles — a rock or
+        // mirror in the gap would seal the only way in.
+        let entranceMid = center + entranceDir * ringRadius
+        func blocksEntrance(_ position: Vector2) -> Bool {
+            config.fortress && position.distance(to: entranceMid) < 180
+        }
 
         // Mirrors first, then rocks, then enemies — each placement pass avoids
         // everything placed before it (spawn sampling checks bodies + mirrors).
@@ -358,16 +443,18 @@ final class GameScene: SKScene {
         let field = Rect(min: Vector2(inset, inset),
                          max: Vector2(mapSize.x - inset, mapSize.y - inset))
         for _ in 0..<config.mirrorCount {
-            guard let center = world.randomFreePosition(radius: mirrorHalfLength + 10,
-                                                        in: field, using: &rng) else { break }
+            guard let mirrorCenter = world.randomFreePosition(radius: mirrorHalfLength + 10,
+                                                              in: field, using: &rng),
+                  !blocksEntrance(mirrorCenter) else { continue }
             let angle = Double.random(in: 0..<Double.pi, using: &rng)
             let along = Vector2(cos(angle), sin(angle)) * mirrorHalfLength
-            world.addMirror(from: center - along, to: center + along)
+            world.addMirror(from: mirrorCenter - along, to: mirrorCenter + along)
         }
         for _ in 0..<config.rockCount {
             let radius = Double.random(in: 38...56, using: &rng)
             guard let position = world.randomFreePosition(radius: radius, in: field,
-                                                          using: &rng) else { break }
+                                                          using: &rng),
+                  !blocksEntrance(position) else { continue }
             world.addRock(at: position, radius: radius)
         }
 
@@ -392,20 +479,30 @@ final class GameScene: SKScene {
         for (tier, count) in config.shooters.enumerated() {
             var placed = 0
             var attempts = 0
-            while placed < count, attempts < 300, let cover = coverSpots.randomElement(using: &rng) {
+            while placed < count, attempts < 300 {
                 attempts += 1
-                let angle = Double.random(in: 0..<(2 * .pi), using: &rng)
-                let dist = cover.radius + npcRadius + Double.random(in: 4...26, using: &rng)
-                let candidate = cover.position + Vector2(cos(angle), sin(angle)) * dist
-                guard candidate.x > 20, candidate.x < mapSize.x - 20,
-                      candidate.y > 20, candidate.y < mapSize.y - 20,
-                      candidate.distance(to: playerStart) > config.shooterMinPlayerDistance,
-                      world.bodies.allSatisfy({ $0.position.distance(to: candidate) >= $0.radius + npcRadius + 6 })
-                else { continue }
+                let candidate: Vector2
+                if config.fortress {
+                    // Fortress: shooters wait anywhere inside the ring — the
+                    // wall itself is their cover.
+                    guard let inside = fortressInteriorPosition(radius: npcRadius) else { continue }
+                    candidate = inside
+                } else {
+                    guard let cover = coverSpots.randomElement(using: &rng) else { break }
+                    let angle = Double.random(in: 0..<(2 * .pi), using: &rng)
+                    let dist = cover.radius + npcRadius + Double.random(in: 4...26, using: &rng)
+                    candidate = cover.position + Vector2(cos(angle), sin(angle)) * dist
+                    guard candidate.x > 20, candidate.x < mapSize.x - 20,
+                          candidate.y > 20, candidate.y < mapSize.y - 20,
+                          candidate.distance(to: playerStart) > config.shooterMinPlayerDistance,
+                          world.bodies.allSatisfy({ $0.position.distance(to: candidate) >= $0.radius + npcRadius + 6 })
+                    else { continue }
+                }
                 let id = world.addShooter(at: candidate, radius: npcRadius)
                 // "Behind these obstacles": a shooter must start HIDDEN —
                 // reject spots with a clear line to the player's spawn.
-                if let pid = world.playerID, world.hasLineOfSight(from: id, to: pid) {
+                if !config.fortress, let pid = world.playerID,
+                   world.hasLineOfSight(from: id, to: pid) {
                     world.remove(bodyID: id)
                     continue
                 }
@@ -429,8 +526,15 @@ final class GameScene: SKScene {
             var attempts = 0
             while placed < count, attempts < 300 {
                 attempts += 1
-                guard let position = world.randomFreePosition(radius: npcRadius, using: &rng),
-                      position.distance(to: playerStart) > config.runnerMinPlayerDistance else { continue }
+                let position: Vector2
+                if config.fortress {
+                    guard let inside = fortressInteriorPosition(radius: npcRadius) else { continue }
+                    position = inside
+                } else {
+                    guard let free = world.randomFreePosition(radius: npcRadius, using: &rng),
+                          free.distance(to: playerStart) > config.runnerMinPlayerDistance else { continue }
+                    position = free
+                }
                 let id = world.addRunner(at: position, radius: npcRadius)
                 world.runnerSpeedOverrides[id] = EnemyTiers.runnerSpeed[tier]
                 shieldSeconds[id] = EnemyTiers.runnerShield[tier]
@@ -451,8 +555,15 @@ final class GameScene: SKScene {
             var attempts = 0
             while placed < count, attempts < 300 {
                 attempts += 1
-                guard let position = world.randomFreePosition(radius: npcRadius, using: &rng),
-                      position.distance(to: playerStart) > config.runnerMinPlayerDistance else { continue }
+                let position: Vector2
+                if config.fortress {
+                    guard let inside = fortressInteriorPosition(radius: npcRadius) else { continue }
+                    position = inside
+                } else {
+                    guard let free = world.randomFreePosition(radius: npcRadius, using: &rng),
+                          free.distance(to: playerStart) > config.runnerMinPlayerDistance else { continue }
+                    position = free
+                }
                 let id = world.addHunter(at: position, radius: npcRadius)
                 hunterApproachSpeeds[id] = EnemyTiers.hunterApproach[tier]
                 hunterAimDurations[id] = EnemyTiers.hunterAim[tier]
@@ -476,8 +587,15 @@ final class GameScene: SKScene {
             var bossAttempts = 0
             while !placed, bossAttempts < 300 {
                 bossAttempts += 1
-                guard let position = world.randomFreePosition(radius: BossStats.radius, using: &rng),
-                      position.distance(to: playerStart) > config.runnerMinPlayerDistance else { continue }
+                let position: Vector2
+                if config.fortress {
+                    guard let inside = fortressInteriorPosition(radius: BossStats.radius) else { continue }
+                    position = inside
+                } else {
+                    guard let free = world.randomFreePosition(radius: BossStats.radius, using: &rng),
+                          free.distance(to: playerStart) > config.runnerMinPlayerDistance else { continue }
+                    position = free
+                }
                 let id: BodyID
                 switch spec.kind {
                 case .runner:
@@ -1406,8 +1524,11 @@ final class GameScene: SKScene {
         }
         for body in world.bodies where body.kind == .hunter {
             let id = body.id
-            let noticed = isOnScreen(position: body.position, radius: body.radius)
-                && world.hasLineOfSight(from: id, to: pid)
+            // A sprung fortress keeps every hunter permanently on the hunt —
+            // they charge and shoot regardless of sight lines.
+            let noticed = fortressBreached
+                || (isOnScreen(position: body.position, radius: body.radius)
+                    && world.hasLineOfSight(from: id, to: pid))
             var mode = hunterModes[id] ?? .patrol(direction: .zero, until: 0)
 
             if case .patrol = mode, noticed {
