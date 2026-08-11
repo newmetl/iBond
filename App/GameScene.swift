@@ -176,9 +176,9 @@ final class GameScene: SKScene {
     /// lie. Scrolling one into view arms it for good; armed mines home in
     /// magnetically, accelerate every frame, and fly straight THROUGH rocks,
     /// mirrors, and other enemies (phantom bodies — no cover works). Laser
-    /// only — and at a quarter of a regular enemy's radius they're very hard
-    /// to hit.
-    private let mineRadius: Double = 3.5
+    /// only — and at a 2pt radius (a seventh of a regular enemy) hitting one
+    /// takes a near-perfect shot.
+    private let mineRadius: Double = 2
     private let mineStartSpeed: Double = 60
     private let mineAcceleration: Double = 90
     private let mineMaxSpeed: Double = 500
