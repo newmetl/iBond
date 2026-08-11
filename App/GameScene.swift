@@ -1162,38 +1162,43 @@ final class GameScene: SKScene {
 
     /// A dormant mine: a tiny dark-red speck, pulsing very slowly. It gives
     /// its position away only through sonar rings — expanding red ripples
-    /// like waves on water — emitted where it currently is. Arming swaps the
-    /// pulse for a fast throb and a rapid ring cadence (see armMine).
+    /// that ride along with the mine, always centered on it. Arming swaps
+    /// the pulse for a fast throb and a rapid ring cadence (see armMine).
+    /// The returned node is an empty container: the pulsing core and the
+    /// rings are children, so the ring animation never fights the pulse.
     private func makeMineNode(radius: Double) -> SKShapeNode {
-        let node = SKShapeNode(circleOfRadius: CGFloat(radius))
-        node.fillColor = SKColor(red: 0.7, green: 0.12, blue: 0.14, alpha: 1)
-        node.strokeColor = SKColor(red: 1, green: 0.35, blue: 0.3, alpha: 0.9)
-        node.lineWidth = 1
+        let node = SKShapeNode()
         node.zPosition = 0
-        node.run(.repeatForever(.sequence([
+        let core = SKShapeNode(circleOfRadius: CGFloat(radius))
+        core.name = "mineCore"
+        core.fillColor = SKColor(red: 0.7, green: 0.12, blue: 0.14, alpha: 1)
+        core.strokeColor = SKColor(red: 1, green: 0.35, blue: 0.3, alpha: 0.9)
+        core.lineWidth = 1
+        core.zPosition = 0.1
+        core.run(.repeatForever(.sequence([
             .scale(to: 1.25, duration: 1.4),
             .scale(to: 0.9, duration: 1.4),
         ])), withKey: "minePulse")
+        node.addChild(core)
         runMineSonar(on: node, interval: 1.8, ringDuration: 1.4)
         return node
     }
 
-    /// Emits an expanding, fading red ring from the node's CURRENT position
-    /// every `interval` seconds — the ripples stay where they were emitted
-    /// while the mine flies on, like a wake.
+    /// Emits an expanding, fading red ring every `interval` seconds AS A
+    /// CHILD of the mine's node — the ripples travel with the mine, always
+    /// centered on it, like a sonar ping around a moving contact.
     private func runMineSonar(on node: SKShapeNode, interval: TimeInterval,
                               ringDuration: TimeInterval) {
         node.removeAction(forKey: "mineSonar")
         node.run(.repeatForever(.sequence([
-            .run { [weak self, weak node] in
-                guard let self, let node, node.parent != nil else { return }
+            .run { [weak node] in
+                guard let node, node.parent != nil else { return }
                 let ring = SKShapeNode(circleOfRadius: 3)
                 ring.strokeColor = SKColor(red: 1, green: 0.3, blue: 0.28, alpha: 0.7)
                 ring.lineWidth = 1
                 ring.fillColor = .clear
-                ring.position = node.position
                 ring.zPosition = -0.5
-                self.addChild(ring)
+                node.addChild(ring)
                 ring.run(.sequence([
                     .group([
                         .scale(to: 9, duration: ringDuration),
@@ -1877,8 +1882,9 @@ final class GameScene: SKScene {
         guard !activeMineIDs.contains(id) else { return }
         activeMineIDs.insert(id)
         guard let node = npcNodes[id] else { return }
-        node.removeAction(forKey: "minePulse")
-        node.run(.repeatForever(.sequence([
+        let core = node.childNode(withName: "mineCore") ?? node
+        core.removeAction(forKey: "minePulse")
+        core.run(.repeatForever(.sequence([
             .scale(to: 1.35, duration: 0.18),
             .scale(to: 0.85, duration: 0.18),
         ])), withKey: "minePulse")
