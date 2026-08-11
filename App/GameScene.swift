@@ -152,6 +152,18 @@ final class GameScene: SKScene {
     private var fortressCenter: Vector2?
     private var fortressRadius: Double = 0
     private var fortressBreached = false
+
+    /// Proximity mines (level 51 on): tiny dormant bodies that pulse slowly
+    /// where they lie. Coming within `mineTriggerDistance` arms one for good;
+    /// armed mines home in magnetically and accelerate every frame. Laser
+    /// only — but at half a regular enemy's radius they're hard to hit.
+    private let mineRadius: Double = 7
+    private let mineTriggerDistance: Double = 130
+    private let mineStartSpeed: Double = 40
+    private let mineAcceleration: Double = 55
+    private let mineMaxSpeed: Double = 380
+    private var activeMineIDs: Set<BodyID> = []
+    private var mineSpeeds: [BodyID: Double] = [:]
     private var batteryHUDNode: SKNode?
     private var enemyDotsNode: SKNode?
     private var lastEnemyDotIDs: Set<BodyID> = []
@@ -251,6 +263,7 @@ final class GameScene: SKScene {
         processLaser()
         processShooters(currentTime)
         processHunters(currentTime)
+        processMines()
         checkTouchKills()
         checkBatteryPickups()
         checkShieldPickups()
@@ -307,6 +320,9 @@ final class GameScene: SKScene {
             }
             if body.kind == .hunter {
                 hunterModes[body.id] = .approach(until: now + hunterApproachDuration)
+            }
+            if body.kind == .mine {
+                armMine(body.id)
             }
         }
     }
@@ -378,6 +394,8 @@ final class GameScene: SKScene {
         fortressCenter = nil
         fortressRadius = 0
         fortressBreached = false
+        activeMineIDs = []
+        mineSpeeds = [:]
         gameStarted = true
         SoundManager.shared.startMusic()
         ensureWorld() // builds now if the scene is laid out; else on next update
@@ -631,6 +649,26 @@ final class GameScene: SKScene {
             }
         }
 
+        // Mines: dormant where they lie, never closer to the spawn than a
+        // shooter may be — the player always has room before the first one
+        // wakes. Fortress levels keep them inside the ring with everyone else.
+        var minesPlaced = 0
+        var mineAttempts = 0
+        while minesPlaced < config.mines, mineAttempts < 300 {
+            mineAttempts += 1
+            let position: Vector2
+            if config.fortress {
+                guard let inside = fortressInteriorPosition(radius: mineRadius) else { continue }
+                position = inside
+            } else {
+                guard let free = world.randomFreePosition(radius: mineRadius, using: &rng),
+                      free.distance(to: playerStart) > config.shooterMinPlayerDistance else { continue }
+                position = free
+            }
+            world.addMine(at: position, radius: mineRadius)
+            minesPlaced += 1
+        }
+
         self.world = world
         buildNodes(for: world)
         updatePlayerShieldRings() // carried-over shields show from frame one
@@ -715,6 +753,15 @@ final class GameScene: SKScene {
         for body in world.bodies where body.kind.isHostile {
             let rgb = enemyColor(for: body)
             enemyBaseColors[body.id] = rgb
+            if body.kind == .mine {
+                // Mines get their own tiny, slowly pulsing look — no facing
+                // line, no armor rings.
+                let node = makeMineNode(radius: body.radius)
+                node.position = CGPoint(x: body.position.x, y: body.position.y)
+                addChild(node)
+                npcNodes[body.id] = node
+                continue
+            }
             let node = makeCircleNode(radius: body.radius,
                                       fill: SKColor(red: rgb.r, green: rgb.g, blue: rgb.b, alpha: 1))
             node.zPosition = 0
@@ -935,6 +982,8 @@ final class GameScene: SKScene {
             return [(0.45, 0.22, 0.62), (0.75, 0.42, 1.0), (0.95, 0.7, 1.0)][tier]
         case .hunter:
             return [(0.6, 0.35, 0.06), (1.0, 0.62, 0.15), (1.0, 0.85, 0.35)][tier]
+        case .mine:
+            return (0.9, 0.25, 0.2)
         default: // shooters (and legacy npc)
             return [(0.62, 0.22, 0.16), (1.0, 0.45, 0.35), (1.0, 0.7, 0.6)][tier]
         }
@@ -958,6 +1007,7 @@ final class GameScene: SKScene {
             switch body.kind {
             case .shooter: return 0
             case .hunter: return 2
+            case .mine: return 4
             default: return 3
             }
         }
@@ -1014,6 +1064,21 @@ final class GameScene: SKScene {
             .scale(to: 0.8, duration: 0.08),
         ])))
         return spark
+    }
+
+    /// A dormant mine: small dark body with a warning-red rim, pulsing very
+    /// slowly. Arming swaps the pulse for a fast angry throb (see armMine).
+    private func makeMineNode(radius: Double) -> SKShapeNode {
+        let node = SKShapeNode(circleOfRadius: CGFloat(radius))
+        node.fillColor = SKColor(red: 0.5, green: 0.1, blue: 0.12, alpha: 1)
+        node.strokeColor = SKColor(red: 1, green: 0.35, blue: 0.3, alpha: 0.9)
+        node.lineWidth = 1.5
+        node.zPosition = 0
+        node.run(.repeatForever(.sequence([
+            .scale(to: 1.25, duration: 1.4),
+            .scale(to: 0.9, duration: 1.4),
+        ])), withKey: "minePulse")
+        return node
     }
 
     /// A big immovable rock: an irregular polygon roughly tracing the engine's
@@ -1084,7 +1149,7 @@ final class GameScene: SKScene {
                 }
                 lastPlayerPosition = position
                 playerNode?.position = position
-            case .npc, .shooter, .runner, .hunter:
+            case .npc, .shooter, .runner, .hunter, .mine:
                 guard let node = npcNodes[body.id] else { break }
                 node.position = CGPoint(x: body.position.x, y: body.position.y)
                 // Shooters track the player; runners face their movement.
@@ -1636,13 +1701,55 @@ final class GameScene: SKScene {
         }
     }
 
-    /// Runners, hunters, and every boss (huge shooters included) kill on
-    /// contact.
+    /// Mines sleep where they lie until the player strays inside the trigger
+    /// range, then arm FOR GOOD: they home in magnetically and accelerate a
+    /// little more every frame. Only the laser stops them.
+    private func processMines() {
+        guard let world else { return }
+        guard gameStarted, let pid = world.playerID,
+              let player = world.body(withID: pid) else {
+            for body in world.bodies where body.kind == .mine {
+                world.setVelocity(.zero, forBodyID: body.id)
+            }
+            return
+        }
+        for body in world.bodies where body.kind == .mine {
+            if !activeMineIDs.contains(body.id) {
+                guard body.position.distance(to: player.position) < mineTriggerDistance
+                else { continue }
+                armMine(body.id)
+            }
+            let speed = min(mineMaxSpeed,
+                            (mineSpeeds[body.id] ?? mineStartSpeed)
+                                + mineAcceleration * frameDt)
+            mineSpeeds[body.id] = speed
+            let toPlayer = player.position - body.position
+            world.setVelocity(toPlayer.length > 1 ? toPlayer.normalized * speed : .zero,
+                              forBodyID: body.id)
+        }
+    }
+
+    /// One-way arming: the slow idle pulse becomes a fast angry throb.
+    private func armMine(_ id: BodyID) {
+        guard !activeMineIDs.contains(id) else { return }
+        activeMineIDs.insert(id)
+        guard let node = npcNodes[id] else { return }
+        node.removeAction(forKey: "minePulse")
+        node.glowWidth = 3
+        node.run(.repeatForever(.sequence([
+            .scale(to: 1.35, duration: 0.18),
+            .scale(to: 0.85, duration: 0.18),
+        ])), withKey: "minePulse")
+    }
+
+    /// Runners, hunters, mines, and every boss (huge shooters included) kill
+    /// on contact.
     private func checkTouchKills() {
         guard gameStarted, let world, let pid = world.playerID,
               let player = world.body(withID: pid) else { return }
         for body in world.bodies
-        where body.kind == .runner || body.kind == .hunter || bossIDs.contains(body.id) {
+        where body.kind == .runner || body.kind == .hunter || body.kind == .mine
+            || bossIDs.contains(body.id) {
             if body.position.distance(to: player.position) <= body.radius + player.radius + 0.5 {
                 killPlayer()
                 return
@@ -1899,6 +2006,8 @@ final class GameScene: SKScene {
         hunterAimDurations[npcID] = nil
         hunterPatrolSpeeds[npcID] = nil
         bossIDs.remove(npcID)
+        activeMineIDs.remove(npcID)
+        mineSpeeds[npcID] = nil
 
         if let node = npcNodes.removeValue(forKey: npcID) {
             node.run(.sequence([

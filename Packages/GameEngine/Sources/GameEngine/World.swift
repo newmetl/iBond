@@ -75,6 +75,17 @@ public final class World {
         return id
     }
 
+    /// Adds a proximity mine: app-steered like the hunter — drive it with
+    /// `setVelocity(_:forBodyID:)`; the engine integrates, damps, and
+    /// collides it but never overrides its velocity.
+    @discardableResult
+    public func addMine(at position: Vector2, radius: Double = 7, mass: Double = 1) -> BodyID {
+        let id = makeID()
+        bodies.append(CircleBody(id: id, kind: .mine, position: position,
+                                 velocity: .zero, radius: radius, mass: mass))
+        return id
+    }
+
     /// Runner IDs that have started chasing (one-way; set by the app when a
     /// runner first becomes visible on screen).
     public private(set) var activeRunnerIDs: Set<BodyID> = []

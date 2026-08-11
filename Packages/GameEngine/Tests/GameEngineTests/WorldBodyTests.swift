@@ -93,6 +93,25 @@ final class WorldBodyTests: XCTestCase {
         XCTAssertTrue(world.bodies.isEmpty)
     }
 
+    func testAddMineCreatesSmallHostileBody() {
+        let world = World(size: Vector2(400, 400))
+        let id = world.addMine(at: Vector2(120, 80), radius: 7)
+        let mine = world.body(withID: id)
+        XCTAssertEqual(mine?.kind, .mine)
+        XCTAssertEqual(mine?.radius, 7)
+        XCTAssertTrue(mine?.kind.isHostile == true)
+    }
+
+    func testMineFollowsSetVelocityLikeAHunter() {
+        // Mines are app-steered: the engine integrates whatever velocity the
+        // app sets and never overrides it.
+        let world = World(size: Vector2(400, 400))
+        let id = world.addMine(at: Vector2(100, 100), radius: 7)
+        world.setVelocity(Vector2(100, 0), forBodyID: id)
+        world.update(dt: 0.1)
+        XCTAssertGreaterThan(world.body(withID: id)!.position.x, 100)
+    }
+
     func testSetRadiusChangesBodyRadius() {
         let world = World(size: Vector2(400, 400))
         let id = world.addRunner(at: Vector2(120, 80), radius: 42)
