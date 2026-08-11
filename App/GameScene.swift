@@ -984,7 +984,7 @@ final class GameScene: SKScene {
             button.lineWidth = selected ? 2.5 : 1.5
             button.fillColor = batteryColor(type)
                 .withAlphaComponent(selected ? 0.45 : 0.16)
-            batteryButtonLabels[type]?.text = "\(Int(reserve.rounded(.up)))s"
+            batteryButtonLabels[type]?.text = String(format: "%.2fs", reserve)
         }
     }
 
