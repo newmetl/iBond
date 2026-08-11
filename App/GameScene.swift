@@ -124,12 +124,17 @@ final class GameScene: SKScene {
     private var laserNode: SKShapeNode?
     private var sparkNode: SKShapeNode?
 
-    /// Laser battery: the current type (fixed capacity/power per type — see
-    /// BatteryType) and remaining seconds of firing time. Drains only while
-    /// the beam is actually rendering; an empty battery just means the laser
-    /// can't fire until a spare battery is collected. Pickups overwrite both.
+    /// Laser batteries: one additive reserve (seconds of firing time) per
+    /// type — every pickup ADDS its capacity to that type's pool, nothing is
+    /// overwritten. `batteryType` is the currently selected laser; it drains
+    /// only while the beam is actually rendering. When the selected pool runs
+    /// dry the laser auto-switches to the next type with charge (red →
+    /// orange → white); the strip buttons switch manually.
     private var batteryType: BatteryType = .red
-    private var laserCharge: Double = 0
+    private var batteryReserves: [BatteryType: Double] = [:]
+    private var currentReserve: Double { batteryReserves[batteryType] ?? 0 }
+    private var batteryButtons: [BatteryType: SKShapeNode] = [:]
+    private var batteryButtonLabels: [BatteryType: SKLabelNode] = [:]
     private var batteryHUDNode: SKNode?
     private var batteryFillBar: SKSpriteNode?
     private var enemyDotsNode: SKNode?
@@ -157,6 +162,37 @@ final class GameScene: SKScene {
         controlPanel?.position = CGPoint(x: 0, y: -size.height / 2 + controlStripHeight / 2)
         controlPanelSeparator?.size = CGSize(width: size.width, height: 1.5)
         controlPanelSeparator?.position = CGPoint(x: 0, y: -size.height / 2 + controlStripHeight)
+        layoutBatteryButtons()
+    }
+
+    private let batteryButtonSize = CGSize(width: 92, height: 44)
+
+    /// The type buttons stack red-top → white-bottom on the strip's right; the
+    /// classic scheme shifts them left to clear the fire button.
+    private func layoutBatteryButtons() {
+        let x = controlScheme == .joystick
+            ? size.width / 2 - 70 - fireButtonRadius - batteryButtonSize.width / 2 - 14
+            : size.width / 2 - 70
+        let centerY = -size.height / 2 + controlStripHeight * 0.5
+        for type in BatteryType.allCases {
+            let slot = CGFloat(1 - type.rawValue) // red +1, orange 0, white -1
+            batteryButtons[type]?.position = CGPoint(x: x, y: centerY + slot * 56)
+        }
+    }
+
+    /// The battery type whose visible button contains the touch, if any.
+    private func batteryButtonHit(_ touch: UITouch) -> BatteryType? {
+        guard let cameraNode else { return nil }
+        let location = touch.location(in: cameraNode)
+        for type in BatteryType.allCases {
+            guard let button = batteryButtons[type], !button.isHidden else { continue }
+            // A little touch padding beyond the drawn rect.
+            if abs(location.x - button.position.x) <= batteryButtonSize.width / 2 + 8,
+               abs(location.y - button.position.y) <= batteryButtonSize.height / 2 + 8 {
+                return type
+            }
+        }
+        return nil
     }
 
     /// Joystick base center in camera coordinates: left half of the control
@@ -265,7 +301,9 @@ final class GameScene: SKScene {
         enemyDotsNode = nil
         lastEnemyDotIDs = []
         batteryType = .red
-        laserCharge = BatteryType.red.capacity
+        batteryReserves = [.red: BatteryType.red.capacity]
+        batteryButtons = [:]
+        batteryButtonLabels = [:]
         beamVisible = false
         shooterAimStart = [:]
         shooterAimNodes = [:]
@@ -603,7 +641,7 @@ final class GameScene: SKScene {
             joystickKnob = knob
 
             if controlScheme == .joystick {
-                // Fire button, pinned to the camera's lower-right corner.
+                // Fire button, on the strip's right side.
                 let fire = SKShapeNode(circleOfRadius: fireButtonRadius)
                 fire.fillColor = SKColor(red: 1, green: 0.25, blue: 0.3, alpha: 0.22)
                 fire.strokeColor = SKColor(red: 1, green: 0.4, blue: 0.4, alpha: 0.6)
@@ -613,6 +651,27 @@ final class GameScene: SKScene {
                 camera.addChild(fire)
                 fireButton = fire
             }
+
+            // Laser-type buttons, stacked on the strip's right (next to the
+            // fire button in the classic scheme). One per battery type; each
+            // appears only while its pool has charge — see updateBatteryHUD.
+            for type in BatteryType.allCases {
+                let button = SKShapeNode(rectOf: batteryButtonSize, cornerRadius: 10)
+                button.zPosition = 3
+                button.isHidden = true
+                camera.addChild(button)
+                batteryButtons[type] = button
+
+                let label = SKLabelNode(text: "")
+                label.fontName = "HelveticaNeue-Bold"
+                label.fontSize = 15
+                label.fontColor = SKColor(white: 1, alpha: 0.9)
+                label.horizontalAlignmentMode = .center
+                label.verticalAlignmentMode = .center
+                button.addChild(label)
+                batteryButtonLabels[type] = label
+            }
+            layoutBatteryButtons()
         }
 
         // Battery HUD (rides the camera): icon with a color-coded charge bar;
@@ -725,10 +784,26 @@ final class GameScene: SKScene {
     }
 
     private func updateBatteryHUD() {
-        // The bar's color IS the battery type; its width shows the charge.
-        let fraction = CGFloat(laserCharge / batteryType.capacity)
+        // The bar's color IS the selected type; its width shows that pool's
+        // charge (capped at one full capacity — reserves can stack higher,
+        // the buttons carry the exact seconds).
+        let fraction = CGFloat(min(1, currentReserve / batteryType.capacity))
         batteryFillBar?.size = CGSize(width: 22 * max(0, fraction), height: 9)
         batteryFillBar?.color = batteryColor(batteryType)
+
+        // Strip buttons: visible only for types with charge; the selected one
+        // wears a white outline. Labels show the whole pool in seconds.
+        for type in BatteryType.allCases {
+            guard let button = batteryButtons[type] else { continue }
+            let reserve = batteryReserves[type] ?? 0
+            button.isHidden = reserve <= 0
+            let selected = type == batteryType
+            button.strokeColor = selected ? .white : batteryColor(type)
+            button.lineWidth = selected ? 2.5 : 1.5
+            button.fillColor = batteryColor(type)
+                .withAlphaComponent(selected ? 0.45 : 0.16)
+            batteryButtonLabels[type]?.text = "\(Int(reserve.rounded(.up)))s"
+        }
     }
 
     /// The pulsing yellow impact spark; used persistently at the beam's
@@ -841,7 +916,9 @@ final class GameScene: SKScene {
         switch controlScheme {
         case .joystick:
             for touch in touches {
-                if isInSteeringZone(touch) {
+                if let type = batteryButtonHit(touch) {
+                    selectBattery(type)
+                } else if isInSteeringZone(touch) {
                     if touchController.began(touch, as: .joystick) {
                         updateJoystick(with: touch)
                     }
@@ -859,7 +936,9 @@ final class GameScene: SKScene {
             // Joystick steers; a touch on the play area (above the control
             // strip) fires. Stray touches on the strip do nothing.
             for touch in touches {
-                if isInSteeringZone(touch) {
+                if let type = batteryButtonHit(touch) {
+                    selectBattery(type)
+                } else if isInSteeringZone(touch) {
                     if touchController.began(touch, as: .joystick) {
                         updateJoystick(with: touch)
                     }
@@ -1036,7 +1115,7 @@ final class GameScene: SKScene {
         // Otherwise the beam fires along the player's current facing (the
         // aim line the joystick steers) — firing has no direction of its own.
         let facing = playerNode.map { Vector2(cos(Double($0.zRotation)), sin(Double($0.zRotation))) }
-        guard laserCharge > 0, firingRequested, let facing,
+        guard currentReserve > 0, firingRequested, let facing,
               let player = world.playerID.flatMap({ world.body(withID: $0) }) else {
             fadeOutBeamIfNeeded()
             return
@@ -1087,11 +1166,29 @@ final class GameScene: SKScene {
         }
         showBeamNodes()
 
-        // The beam rendered this frame, so it drains the battery. This runs
-        // after the kill so a last-kill-on-last-drop tie counts as a win.
-        // An empty battery is NOT game over: the laser just can't fire until
-        // the player collects a spare battery.
-        laserCharge = max(0, laserCharge - frameDt)
+        // The beam rendered this frame, so it drains the selected reserve.
+        // This runs after the kill so a last-kill-on-last-drop tie counts as
+        // a win. Running dry auto-switches to the next type with charge; all
+        // pools empty is NOT game over, the laser just can't fire until the
+        // player collects another battery.
+        batteryReserves[batteryType] = max(0, currentReserve - frameDt)
+        if currentReserve <= 0 { autoSwitchBattery() }
+    }
+
+    /// Selects the given battery type: the beam color and the strip buttons
+    /// follow immediately.
+    private func selectBattery(_ type: BatteryType) {
+        batteryType = type
+        laserNode?.strokeColor = batteryColor(type)
+    }
+
+    /// The selected pool is empty: fall over to the first type (red → orange
+    /// → white) that still has charge, if any.
+    private func autoSwitchBattery() {
+        guard currentReserve <= 0,
+              let next = BatteryType.allCases.first(where: { (batteryReserves[$0] ?? 0) > 0 })
+        else { return }
+        selectBattery(next)
     }
 
     /// Shield damage from the player's beam this frame (damage accumulates as
@@ -1394,11 +1491,11 @@ final class GameScene: SKScene {
         batteryPickups.removeAll { pickup in
             let distance = player.position.distance(to: Vector2(pickup.position.x, pickup.position.y))
             guard distance <= player.radius + 14 else { return false }
-            // The pickup overwrites both the type and the remaining charge —
-            // grabbing a Red while holding a half-full White is a downgrade.
-            batteryType = pickup.type
-            laserCharge = pickup.type.capacity
-            laserNode?.strokeColor = batteryColor(pickup.type)
+            // The pickup ADDS a full charge to its type's pool — collecting a
+            // second Red on top of a full Red gives 6s. If the selected pool
+            // is empty, switch straight to the fresh one.
+            batteryReserves[pickup.type, default: 0] += pickup.type.capacity
+            if currentReserve <= 0 { selectBattery(pickup.type) }
             pickup.node.run(.sequence([
                 .group([
                     .scale(to: 1.8, duration: 0.2),
