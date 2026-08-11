@@ -1423,7 +1423,7 @@ final class GameScene: SKScene {
             }
             // Huge runners shrink and accelerate as their shield burns —
             // full body 42pt at full shield down to runnerMinRadius near
-            // death, chase speed up to 1.5× base. The weaker the boss, the
+            // death, chase speed up to 2× base. The weaker the boss, the
             // smaller and faster the target. The node scales with the engine
             // radius (rings and facing line ride along).
             if bossIDs.contains(victimID),
@@ -1435,7 +1435,7 @@ final class GameScene: SKScene {
                 node.setScale(CGFloat(radius / BossStats.radius))
                 let tier = min(max(enemyTierIndex[victimID] ?? 0, 0), 2)
                 world.runnerSpeedOverrides[victimID] =
-                    BossStats.runnerSpeed(tier: tier) * (1 + 0.5 * progress)
+                    BossStats.runnerSpeed(tier: tier) * (1 + 1.0 * progress)
             }
         }
     }
